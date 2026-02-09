@@ -74,8 +74,10 @@ export default function FeaturePicker({
       const processInfo = f.paneCommand
         ? isIdle ? '  idle' : `  ● ${f.paneCommand} running`
         : '';
+      const prefix = f.isMain ? '⌂ ' : '';
+      const suffix = f.isMain ? '  [source]' : '';
       return {
-        label: `${f.name}  ${f.branch}${processInfo}`,
+        label: `${prefix}${f.name}  ${f.branch}${processInfo}${suffix}`,
         value: f.name,
       };
     }),

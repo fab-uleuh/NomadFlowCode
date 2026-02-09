@@ -122,17 +122,26 @@ class GitService:
                     worktree_path = current_worktree["worktree"]
                     branch = current_worktree.get("branch", "")
 
-                    # Skip the main repository itself
+                    # Clean up branch name (remove refs/heads/)
+                    if branch.startswith("refs/heads/"):
+                        branch = branch[len("refs/heads/"):]
+
+                    # Main repository itself: add as is_main=True
                     if worktree_path == str(repo_path_obj):
+                        features.append(
+                            Feature(
+                                name=branch or repo_path_obj.name,
+                                worktree_path=worktree_path,
+                                branch=branch,
+                                is_active=False,
+                                is_main=True,
+                            )
+                        )
                         current_worktree = {}
                         continue
 
                     # Extract feature name from path
                     feature_name = Path(worktree_path).name
-
-                    # Clean up branch name (remove refs/heads/)
-                    if branch.startswith("refs/heads/"):
-                        branch = branch[len("refs/heads/"):]
 
                     features.append(
                         Feature(

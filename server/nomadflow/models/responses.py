@@ -18,6 +18,7 @@ class Feature(BaseModel):
     worktree_path: str = Field(..., alias="worktreePath", description="Path to the worktree")
     branch: str = Field(..., description="Branch name")
     is_active: bool = Field(default=False, alias="isActive", description="Whether this feature is currently active")
+    is_main: bool = Field(default=False, alias="isMain", description="Whether this is the main repository (not a worktree)")
 
     model_config = {"populate_by_name": True}
 

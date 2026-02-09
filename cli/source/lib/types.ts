@@ -21,6 +21,7 @@ export interface Feature {
   worktreePath: string;
   branch: string;
   isActive: boolean;
+  isMain?: boolean;
   createdAt?: number;
   tmuxWindow?: string;
   /** Process running in the tmux pane (detected locally) */

@@ -115,6 +115,18 @@ async def delete_feature(
     Also kills any associated tmux window.
     """
     try:
+        # Prevent deletion of the main repository branch
+        features = await git_service.list_features(request.repo_path)
+        feature = next(
+            (f for f in features if f.name == request.feature_name),
+            None,
+        )
+        if feature and feature.is_main:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the main repository branch",
+            )
+
         # Kill tmux window if it exists
         # Window name format: repo:feature
         window_name = get_window_name(request.repo_path, request.feature_name)
@@ -160,7 +172,10 @@ async def switch_feature(
 
         worktree_path: str
 
-        if not feature:
+        if feature and feature.is_main:
+            # Main repository branch: use repo path directly, no worktree creation
+            worktree_path = feature.worktree_path
+        elif not feature:
             # Feature doesn't exist, create it automatically
             # create_feature auto-detects the default branch
             worktree_path, branch = await git_service.create_feature(

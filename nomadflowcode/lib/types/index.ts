@@ -32,6 +32,7 @@ export interface Feature {
   worktreePath: string;
   branch: string;
   isActive: boolean;
+  isMain?: boolean;
   createdAt?: number;
   tmuxWindow?: string;
 }

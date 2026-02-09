@@ -15,6 +15,7 @@ import {
   AlertCircleIcon,
   PlusIcon,
   FolderIcon,
+  HomeIcon,
   LeafIcon,
   XIcon,
 } from 'lucide-react-native';
@@ -175,6 +176,7 @@ export default function FeaturesScreen() {
 
   const deleteFeature = async (feature: Feature) => {
     if (!server) return;
+    if (feature.isMain) return; // Cannot delete main branch
 
     Alert.alert(
       'Supprimer la feature ?',
@@ -203,6 +205,18 @@ export default function FeaturesScreen() {
   const renderFeature = ({ item }: { item: Feature }) => {
     const isLastUsed = lastSelection.featureName === item.name;
 
+    const iconAs = item.isMain ? HomeIcon : item.isActive ? LeafIcon : GitBranchIcon;
+    const iconColor = item.isMain
+      ? 'text-warning'
+      : item.isActive
+        ? 'text-success'
+        : 'text-primary';
+    const iconBg = item.isMain
+      ? 'bg-warning/10'
+      : item.isActive
+        ? 'bg-success/10'
+        : 'bg-primary/10';
+
     return (
       <Pressable
         onPress={() => handleFeaturePress(item)}
@@ -212,30 +226,35 @@ export default function FeaturesScreen() {
           className={
             isLastUsed
               ? 'border-2 border-primary'
-              : item.isActive
-                ? 'border-2 border-success'
-                : ''
+              : item.isMain
+                ? 'border-2 border-warning'
+                : item.isActive
+                  ? 'border-2 border-success'
+                  : ''
           }>
           <CardHeader className="flex-row items-center gap-3 pb-3">
             <View
-              className={`h-10 w-10 items-center justify-center rounded-full ${item.isActive ? 'bg-success/10' : 'bg-primary/10'}`}>
-              <Icon
-                as={item.isActive ? LeafIcon : GitBranchIcon}
-                className={item.isActive ? 'text-success' : 'text-primary'}
-                size={20}
-              />
+              className={`h-10 w-10 items-center justify-center rounded-full ${iconBg}`}>
+              <Icon as={iconAs} className={iconColor} size={20} />
             </View>
             <View className="flex-1">
               <View className="flex-row items-center gap-2">
                 <CardTitle className="text-base">{item.name}</CardTitle>
-                {isLastUsed && (
+                {item.isMain && (
+                  <View className="rounded-full bg-warning px-2 py-0.5">
+                    <Text className="text-[10px] font-semibold text-white">
+                      Source
+                    </Text>
+                  </View>
+                )}
+                {isLastUsed && !item.isMain && (
                   <View className="rounded-full bg-primary px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-primary-foreground">
                       Dernier
                     </Text>
                   </View>
                 )}
-                {item.isActive && !isLastUsed && (
+                {item.isActive && !isLastUsed && !item.isMain && (
                   <View className="rounded-full bg-success px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-white">Actif</Text>
                   </View>
