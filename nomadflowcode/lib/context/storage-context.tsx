@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
-import type { Server, Repository, Feature, AppSettings } from '../types';
+import type { Server, Repository, Feature } from '@shared';
+import type { AppSettings } from '../types';
 
 /**
  * Migrate old server format (url) to new format (ttydUrl + apiUrl)

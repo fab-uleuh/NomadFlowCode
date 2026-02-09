@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
 import { executeServerCommand } from '@/lib/server-commands';
-import type { Feature } from '@/lib/types';
+import type { Feature } from '@shared';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   GitBranchIcon,

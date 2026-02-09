@@ -5,7 +5,7 @@ import type {
   FeatureListResponse,
   SwitchFeatureResult,
   CreateFeatureResult,
-} from './types.js';
+} from '../types.js';
 
 function getApiBaseUrl(server: Server): string {
   let baseUrl = server.apiUrl;

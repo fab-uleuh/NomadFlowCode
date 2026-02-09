@@ -1,9 +1,9 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { Feature } from '../lib/types.js';
+import type { CliFeature } from '../lib/types.js';
 
 interface FeatureCardProps {
-  feature: Feature;
+  feature: CliFeature;
   isSelected?: boolean;
 }
 

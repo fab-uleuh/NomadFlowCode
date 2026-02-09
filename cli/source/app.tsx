@@ -5,7 +5,8 @@ import type { NomadFlowConfig } from './lib/config.js';
 import { loadState, saveState } from './lib/state.js';
 import { switchFeature } from './lib/api-client.js';
 import { attachSession, sessionExists } from './lib/tmux.js';
-import type { Server, Repository, Feature, CliState, WizardStep } from './lib/types.js';
+import type { Server, Repository, Feature } from './types.js';
+import type { CliState, WizardStep } from './lib/types.js';
 
 import Header from './components/Header.js';
 import Breadcrumb from './components/Breadcrumb.js';

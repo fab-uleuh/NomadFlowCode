@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { Select, Spinner } from '@inkjs/ui';
-import type { Server } from '../lib/types.js';
+import type { Server } from '../types.js';
 import { checkHealth } from '../lib/api-client.js';
 
 interface ServerPickerProps {

@@ -3,7 +3,8 @@ import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
 import { switchToFeature } from '@/lib/server-commands';
-import type { ConnectionState, SwitchFeatureResult } from '@/lib/types';
+import type { SwitchFeatureResult } from '@shared';
+import type { ConnectionState } from '@/lib/types';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeftIcon,

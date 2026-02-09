@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": "source",
+    "rootDirs": ["source", "../shared"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,6 +13,6 @@
     "declaration": true,
     "sourceMap": true
   },
-  "include": ["source/**/*"],
+  "include": ["source/**/*", "../shared/**/*"],
   "exclude": ["node_modules", "dist"]
 }

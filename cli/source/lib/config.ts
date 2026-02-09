@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parse as parseToml } from 'smol-toml';
-import type { Server } from './types.js';
+import type { Server } from '../types.js';
 
 export interface NomadFlowConfig {
   paths: {

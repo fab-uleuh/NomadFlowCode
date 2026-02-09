@@ -1,3 +1,5 @@
+import type { Server, Feature } from '@shared';
+
 // Navigation types for expo-router
 export type RootStackParamList = {
   index: undefined;
@@ -10,43 +12,10 @@ export type RootStackParamList = {
   'job-detail': { serverId: string; jobId: string };
 };
 
-// Data types
-export interface Server {
-  id: string;
-  name: string;
-  ttydUrl?: string;      // HTTP URL for ttyd terminal - http://host:7681
-  apiUrl?: string;       // REST API URL - http://host:8080
-  authToken?: string;    // Shared secret for API and ttyd authentication
-  lastConnected?: number;
-}
-
-export interface Repository {
-  name: string;
-  path: string;
-  branch: string;
-  lastAccessed?: number;
-}
-
-export interface Feature {
-  name: string;
-  worktreePath: string;
-  branch: string;
-  isActive: boolean;
-  isMain?: boolean;
-  createdAt?: number;
-  tmuxWindow?: string;
-}
-
 export interface TmuxSession {
   name: string;
-  windows: TmuxWindow[];
+  windows: import('@shared').TmuxWindow[];
   attached: boolean;
-}
-
-export interface TmuxWindow {
-  index: number;
-  name: string;
-  active: boolean;
 }
 
 export interface AppSettings {
@@ -74,21 +43,6 @@ export interface TerminalMessage {
   rows?: number;
 }
 
-// API Response types
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-export interface RepoListResponse {
-  repos: Repository[];
-}
-
-export interface FeatureListResponse {
-  features: Feature[];
-}
-
 // Command types for server scripts
 export interface ServerCommand {
   action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo';
@@ -106,10 +60,4 @@ export interface SwitchFeatureParams {
   featureName: string;
   launchAgent?: boolean;
   agentCommand?: string;
-}
-
-export interface SwitchFeatureResult {
-  worktreePath: string;
-  tmuxWindow: string;
-  hasRunningProcess: boolean;
 }

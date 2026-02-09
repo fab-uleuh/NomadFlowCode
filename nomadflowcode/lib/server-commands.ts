@@ -1,4 +1,5 @@
-import type { Server, ServerCommand, ApiResponse, SwitchFeatureParams, SwitchFeatureResult } from './types';
+import type { Server, ApiResponse, SwitchFeatureResult } from '@shared';
+import type { ServerCommand, SwitchFeatureParams } from './types';
 
 /**
  * Get the API base URL from server config

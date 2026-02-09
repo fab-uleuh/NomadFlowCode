@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import type { TmuxWindow } from './types.js';
+import type { TmuxWindow } from '../types.js';
 
 function exec(cmd: string): string | null {
   try {

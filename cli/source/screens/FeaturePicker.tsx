@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { Select, Spinner } from '@inkjs/ui';
-import type { Server, Repository, Feature } from '../lib/types.js';
+import type { Server, Repository, Feature } from '../types.js';
+import type { CliFeature } from '../lib/types.js';
 import { listFeatures } from '../lib/api-client.js';
 import { getPaneCommand, listWindows } from '../lib/tmux.js';
 
@@ -22,7 +23,7 @@ export default function FeaturePicker({
   onCreate,
   onBack,
 }: FeaturePickerProps) {
-  const [features, setFeatures] = useState<Feature[]>([]);
+  const [features, setFeatures] = useState<CliFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 

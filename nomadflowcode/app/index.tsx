@@ -3,7 +3,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
-import type { Server } from '@/lib/types';
+import type { Server } from '@shared';
 import { Link, Stack, useRouter } from 'expo-router';
 import {
   MonitorIcon,

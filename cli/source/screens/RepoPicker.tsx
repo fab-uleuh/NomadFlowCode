@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { Select, Spinner } from '@inkjs/ui';
-import type { Server, Repository } from '../lib/types.js';
+import type { Server, Repository } from '../types.js';
 import { listRepos } from '../lib/api-client.js';
 
 interface RepoPickerProps {

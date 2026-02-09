@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput, Spinner, ConfirmInput } from '@inkjs/ui';
-import type { Server, Repository } from '../lib/types.js';
+import type { Server, Repository } from '../types.js';
 import { createFeature } from '../lib/api-client.js';
 
 interface FeatureCreateProps {
