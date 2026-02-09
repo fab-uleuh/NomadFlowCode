@@ -163,8 +163,8 @@ export default function ReposScreen() {
       <Pressable onPress={() => handleRepoPress(item)} className="mb-3">
         <Card className={isLastUsed ? 'border-2 border-primary' : ''}>
           <CardHeader className="flex-row items-center gap-3 pb-3">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
-              <Icon as={PackageIcon} className="text-blue-500" size={20} />
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Icon as={PackageIcon} className="text-primary" size={20} />
             </View>
             <View className="flex-1">
               <View className="flex-row items-center gap-2">
@@ -179,8 +179,8 @@ export default function ReposScreen() {
               </View>
               <CardDescription className="text-xs">{item.path}</CardDescription>
               <View className="mt-1 flex-row items-center gap-1">
-                <Icon as={GitBranchIcon} className="text-green-500" size={12} />
-                <Text className="text-xs text-green-500">{item.branch}</Text>
+                <Icon as={GitBranchIcon} className="text-success" size={12} />
+                <Text className="text-xs text-success">{item.branch}</Text>
               </View>
             </View>
             <Icon as={ChevronRightIcon} className="text-muted-foreground" size={20} />

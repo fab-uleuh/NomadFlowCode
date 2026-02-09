@@ -325,7 +325,7 @@ export default function TerminalScreen() {
   }
 
   const isDark = colorScheme === 'dark';
-  const bgColor = isDark ? '#1a1a1a' : '#ffffff';
+  const bgColor = isDark ? 'hsl(240, 15%, 6%)' : 'hsl(240, 20%, 98%)';
   const terminalUrl = buildTtydUrl(server);
   const apiUrl = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
   const injectedJS = buildInjectedJS(apiUrl, server.authToken);
@@ -336,14 +336,14 @@ export default function TerminalScreen() {
     : undefined;
 
   console.log('[Terminal] ttyd URL:', terminalUrl, 'API WS proxy:', apiUrl);
-  const statusColor = connectionState.status === 'connected' ? 'text-green-500' : connectionState.status === 'error' || connectionState.status === 'disconnected' ? 'text-red-500' : 'text-yellow-500';
+  const statusColor = connectionState.status === 'connected' ? 'text-success' : connectionState.status === 'error' || connectionState.status === 'disconnected' ? 'text-destructive' : 'text-warning';
 
   if (isPreparingTerminal) {
     return (
       <SafeAreaView className="flex-1 bg-black">
         <Stack.Screen options={{ headerShown: false }} />
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#50fa7b" />
+          <ActivityIndicator size="large" color="hsl(250, 85%, 65%)" />
           <Text className="mt-4 text-muted-foreground">Préparation du terminal...</Text>
           <Text className="mt-2 text-sm text-muted-foreground">{featureName}</Text>
         </View>

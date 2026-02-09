@@ -167,7 +167,7 @@ export default function ServersScreen() {
           <Link href="/add-server" asChild>
             <Button
               size="icon"
-              className="absolute bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 active:bg-blue-700">
+              className="absolute bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary active:bg-primary/90">
               <Icon as={PlusIcon} size={24} className="text-white" />
             </Button>
           </Link>

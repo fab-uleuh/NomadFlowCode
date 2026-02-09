@@ -213,15 +213,15 @@ export default function FeaturesScreen() {
             isLastUsed
               ? 'border-2 border-primary'
               : item.isActive
-                ? 'border-2 border-green-500'
+                ? 'border-2 border-success'
                 : ''
           }>
           <CardHeader className="flex-row items-center gap-3 pb-3">
             <View
-              className={`h-10 w-10 items-center justify-center rounded-full ${item.isActive ? 'bg-green-500/10' : 'bg-primary/10'}`}>
+              className={`h-10 w-10 items-center justify-center rounded-full ${item.isActive ? 'bg-success/10' : 'bg-primary/10'}`}>
               <Icon
                 as={item.isActive ? LeafIcon : GitBranchIcon}
-                className={item.isActive ? 'text-green-500' : 'text-primary'}
+                className={item.isActive ? 'text-success' : 'text-primary'}
                 size={20}
               />
             </View>
@@ -236,7 +236,7 @@ export default function FeaturesScreen() {
                   </View>
                 )}
                 {item.isActive && !isLastUsed && (
-                  <View className="rounded-full bg-green-500 px-2 py-0.5">
+                  <View className="rounded-full bg-success px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-white">Actif</Text>
                   </View>
                 )}
