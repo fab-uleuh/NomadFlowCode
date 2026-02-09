@@ -3,7 +3,7 @@ import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
 import { switchToFeature } from '@/lib/server-commands';
-import type { ConnectionState } from '@/lib/types';
+import type { ConnectionState, SwitchFeatureResult } from '@/lib/types';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeftIcon,
@@ -181,6 +181,7 @@ export default function TerminalScreen() {
   };
 
   const webViewRef = useRef<WebView>(null);
+  const hasRunningProcessRef = useRef(false);
   const shortcutsAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(1)).current;
 
@@ -206,8 +207,11 @@ export default function TerminalScreen() {
       try {
         const result = await switchToFeature(server, { repoPath, featureName });
         if (result.success && result.data) {
-          setActualWorktreePath(result.data.worktreePath);
-          setHasRunningProcess(result.data.hasRunningProcess);
+          const data = result.data as SwitchFeatureResult & Record<string, unknown>;
+          setActualWorktreePath(data.worktreePath ?? data.worktree_path as string ?? null);
+          const running = !!(data.hasRunningProcess ?? data.has_running_process);
+          setHasRunningProcess(running);
+          hasRunningProcessRef.current = running;
         }
       } catch (error) {
         console.warn('[Terminal] Error switching feature:', error);
@@ -286,7 +290,8 @@ export default function TerminalScreen() {
   const sendInitCommands = useCallback(() => {
     // Don't send any commands if a process (like claude) is already running
     // The server already detected this and skipped cd/clear
-    if (hasRunningProcess) {
+    // Use ref to always read the latest value (avoids stale closure in handleWebViewMessage)
+    if (hasRunningProcessRef.current) {
       console.log('[Terminal] Process already running, skipping init commands');
       return;
     }
