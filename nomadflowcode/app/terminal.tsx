@@ -208,9 +208,8 @@ export default function TerminalScreen() {
       try {
         const result = await switchToFeature(server, { repoPath, featureName });
         if (result.success && result.data) {
-          const data = result.data as SwitchFeatureResult & Record<string, unknown>;
-          setActualWorktreePath(data.worktreePath ?? data.worktree_path as string ?? null);
-          const running = !!(data.hasRunningProcess ?? data.has_running_process);
+          setActualWorktreePath(result.data.worktreePath ?? null);
+          const running = !!result.data.hasRunningProcess;
           setHasRunningProcess(running);
           hasRunningProcessRef.current = running;
         }

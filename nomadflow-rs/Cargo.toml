@@ -1,0 +1,24 @@
+[workspace]
+members = [
+    "crates/nomadflow-core",
+    "crates/nomadflow-server",
+    "crates/nomadflow-tui",
+]
+resolver = "2"
+
+[package]
+name = "nomadflow"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "nomadflow"
+path = "src/main.rs"
+
+[dependencies]
+nomadflow-core = { path = "crates/nomadflow-core" }
+nomadflow-server = { path = "crates/nomadflow-server" }
+nomadflow-tui = { path = "crates/nomadflow-tui" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+color-eyre = "0.6"

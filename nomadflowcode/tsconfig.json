@@ -4,8 +4,8 @@
     "strict": true,
     "paths": {
       "@/*": ["./*"],
-      "@shared": ["../shared/types"]
+      "@shared": ["./lib/shared-types"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts", "../shared/**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"]
 }
