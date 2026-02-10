@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 15.0.0"
+    "version": ">= 15.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -13,6 +14,7 @@
       "channel": "preview"
     },
     "production": {
+      "autoIncrement": true,
       "channel": "production"
     }
   }

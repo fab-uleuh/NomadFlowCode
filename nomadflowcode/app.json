@@ -24,7 +24,8 @@
           "NSAllowsLocalNetworking": true
         }
       },
-      "bundleIdentifier": "com.fab-uleuh.nomadflowcode"
+      "bundleIdentifier": "com.fab-uleuh.nomadflowcode",
+      "buildNumber": "3"
     },
     "android": {
       "edgeToEdgeEnabled": true,
