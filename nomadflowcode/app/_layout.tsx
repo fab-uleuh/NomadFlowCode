@@ -4,7 +4,8 @@ import { NAV_THEME, THEME } from '@/lib/theme';
 import { StorageProvider } from '@/lib/context/storage-context';
 import { ThemeProvider } from '@react-navigation/native';
 import { PortalHost } from '@rn-primitives/portal';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import {
@@ -53,6 +54,37 @@ export default function RootLayout() {
     }
     checkForUpdates();
   }, []);
+
+  const router = useRouter();
+
+  useEffect(() => {
+    function handleDeepLink(event: { url: string }) {
+      const parsed = Linking.parse(event.url);
+      if (parsed.hostname === 'connect' && parsed.queryParams?.url) {
+        const serverUrl = parsed.queryParams.url as string;
+        if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+          console.warn('Deep link ignored: invalid URL scheme', serverUrl);
+          return;
+        }
+        router.push({
+          pathname: '/add-server',
+          params: {
+            url: parsed.queryParams.url as string,
+            secret: (parsed.queryParams.secret as string) || '',
+          },
+        });
+      }
+    }
+
+    // Handle URL that launched the app
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    // Handle URLs while the app is open
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => subscription.remove();
+  }, [router]);
 
   if (!fontsLoaded) {
     return null;

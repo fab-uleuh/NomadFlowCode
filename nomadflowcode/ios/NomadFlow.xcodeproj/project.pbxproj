@@ -8,25 +8,25 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1464B3E99EAE5AF7BDE480FB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C3ACB34E3161A26851C21554 /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		43B06C4CE389113807346C1A /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AE38DFE0740B0846E82BE7 /* ExpoModulesProvider.swift */; };
-		9F16A10B921A132F35AB4610 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 09D6AFFE54F93CB4393144B4 /* PrivacyInfo.xcprivacy */; };
+		4272160FF47E3F92AF174B76 /* libPods-NomadFlow.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8F6E6F16F59F36003D301F9B /* libPods-NomadFlow.a */; };
+		7DEB73AF6273730F9091F0DB /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9409549C43BF9B22A74311DC /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		D05D0DF65AD70F6B95D6224E /* libPods-NomadFlow.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C8E581DAAF63C0824341FA /* libPods-NomadFlow.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		09D6AFFE54F93CB4393144B4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = NomadFlow/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* NomadFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NomadFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = NomadFlow/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = NomadFlow/Info.plist; sourceTree = "<group>"; };
-		34C8E581DAAF63C0824341FA /* libPods-NomadFlow.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NomadFlow.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		39AE38DFE0740B0846E82BE7 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-NomadFlow/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		5075A283C10A53B0B4D61209 /* Pods-NomadFlow.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NomadFlow.debug.xcconfig"; path = "Target Support Files/Pods-NomadFlow/Pods-NomadFlow.debug.xcconfig"; sourceTree = "<group>"; };
+		8F6E6F16F59F36003D301F9B /* libPods-NomadFlow.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NomadFlow.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9409549C43BF9B22A74311DC /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-NomadFlow/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		95B9781A57B95A2F0F9D76A7 /* Pods-NomadFlow.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NomadFlow.debug.xcconfig"; path = "Target Support Files/Pods-NomadFlow/Pods-NomadFlow.debug.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = NomadFlow/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		DDF95AC608E07598C064D7C2 /* Pods-NomadFlow.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NomadFlow.release.xcconfig"; path = "Target Support Files/Pods-NomadFlow/Pods-NomadFlow.release.xcconfig"; sourceTree = "<group>"; };
+		C2FDDD67CDF51398060004AD /* Pods-NomadFlow.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NomadFlow.release.xcconfig"; path = "Target Support Files/Pods-NomadFlow/Pods-NomadFlow.release.xcconfig"; sourceTree = "<group>"; };
+		C3ACB34E3161A26851C21554 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = NomadFlow/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NomadFlow/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* NomadFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NomadFlow-Bridging-Header.h"; path = "NomadFlow/NomadFlow-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,21 +37,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D05D0DF65AD70F6B95D6224E /* libPods-NomadFlow.a in Frameworks */,
+				4272160FF47E3F92AF174B76 /* libPods-NomadFlow.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		09813B93F3F08673B7EED9C2 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				D4A8E25F7D460847B9B1847F /* NomadFlow */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* NomadFlow */ = {
 			isa = PBXGroup;
 			children = (
@@ -61,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				09D6AFFE54F93CB4393144B4 /* PrivacyInfo.xcprivacy */,
+				C3ACB34E3161A26851C21554 /* PrivacyInfo.xcprivacy */,
 			);
 			name = NomadFlow;
 			sourceTree = "<group>";
@@ -70,19 +62,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				34C8E581DAAF63C0824341FA /* libPods-NomadFlow.a */,
+				8F6E6F16F59F36003D301F9B /* libPods-NomadFlow.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		55013FA917CE8A660771D9D1 /* Pods */ = {
+		75C6B19FD67DF6E0565B9ADC /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				5075A283C10A53B0B4D61209 /* Pods-NomadFlow.debug.xcconfig */,
-				DDF95AC608E07598C064D7C2 /* Pods-NomadFlow.release.xcconfig */,
+				AC2DCDD55BBFFE9AB31F52B2 /* NomadFlow */,
 			);
-			name = Pods;
-			path = Pods;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -99,8 +89,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				55013FA917CE8A660771D9D1 /* Pods */,
-				09813B93F3F08673B7EED9C2 /* ExpoModulesProviders */,
+				BE9DFB85665DBCA8E5FB5503 /* Pods */,
+				75C6B19FD67DF6E0565B9ADC /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -115,6 +105,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		AC2DCDD55BBFFE9AB31F52B2 /* NomadFlow */ = {
+			isa = PBXGroup;
+			children = (
+				9409549C43BF9B22A74311DC /* ExpoModulesProvider.swift */,
+			);
+			name = NomadFlow;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -124,12 +122,14 @@
 			path = NomadFlow/Supporting;
 			sourceTree = "<group>";
 		};
-		D4A8E25F7D460847B9B1847F /* NomadFlow */ = {
+		BE9DFB85665DBCA8E5FB5503 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				39AE38DFE0740B0846E82BE7 /* ExpoModulesProvider.swift */,
+				95B9781A57B95A2F0F9D76A7 /* Pods-NomadFlow.debug.xcconfig */,
+				C2FDDD67CDF51398060004AD /* Pods-NomadFlow.release.xcconfig */,
 			);
-			name = NomadFlow;
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "NomadFlow" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				473A03B5380FA87371014626 /* [Expo] Configure project */,
+				FDEFC8AAA26B8E9DEBE53DAE /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				6476501AF1AFE3D298865D80 /* [CP] Embed Pods Frameworks */,
+				AF2FDF17710C8CC79E4D7667 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				9F16A10B921A132F35AB4610 /* PrivacyInfo.xcprivacy in Resources */,
+				1464B3E99EAE5AF7BDE480FB /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,52 +242,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		473A03B5380FA87371014626 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/NomadFlow/NomadFlow.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-NomadFlow/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-NomadFlow/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-NomadFlow/expo-configure-project.sh\"\n";
-		};
-		6476501AF1AFE3D298865D80 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-NomadFlow/Pods-NomadFlow-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NomadFlow/Pods-NomadFlow-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -324,6 +278,52 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NomadFlow/Pods-NomadFlow-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		AF2FDF17710C8CC79E4D7667 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-NomadFlow/Pods-NomadFlow-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NomadFlow/Pods-NomadFlow-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		FDEFC8AAA26B8E9DEBE53DAE /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/NomadFlow/NomadFlow.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-NomadFlow/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-NomadFlow/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-NomadFlow/expo-configure-project.sh\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -332,7 +332,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				43B06C4CE389113807346C1A /* ExpoModulesProvider.swift in Sources */,
+				7DEB73AF6273730F9091F0DB /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -341,7 +341,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5075A283C10A53B0B4D61209 /* Pods-NomadFlow.debug.xcconfig */;
+			baseConfigurationReference = 95B9781A57B95A2F0F9D76A7 /* Pods-NomadFlow.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -377,7 +377,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DDF95AC608E07598C064D7C2 /* Pods-NomadFlow.release.xcconfig */;
+			baseConfigurationReference = C2FDDD67CDF51398060004AD /* Pods-NomadFlow.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

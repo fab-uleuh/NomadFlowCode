@@ -4,18 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, typ
 import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings, TerminalShortcut } from '../types';
 
-/** Derive ttydUrl from apiUrl (same host, port 7681). */
-function deriveTtydUrl(apiUrl: string): string {
-  try {
-    const url = new URL(apiUrl);
-    url.port = '7681';
-    url.pathname = '/';
-    return url.toString().replace(/\/$/, '');
-  } catch {
-    return 'http://localhost:7681';
-  }
-}
-
 /**
  * Migrate old server formats to current format.
  * Handles: old 'url' (WebSocket) field, old 'ttydUrl' field.
@@ -62,8 +50,14 @@ function migrateServer(server: any): Server {
   }
 
   // Ensure ttydUrl is set (derive from apiUrl if missing)
-  if (!migrated.ttydUrl) {
-    migrated.ttydUrl = deriveTtydUrl(migrated.apiUrl!);
+  if (!migrated.ttydUrl && migrated.apiUrl) {
+    try {
+      const url = new URL(migrated.apiUrl);
+      url.pathname = '/terminal';
+      migrated.ttydUrl = url.toString().replace(/\/$/, '');
+    } catch {
+      // ignore
+    }
   }
 
   return migrated;

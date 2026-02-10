@@ -11,7 +11,7 @@ import { View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-n
 
 export default function AddServerScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ serverId?: string }>();
+  const params = useLocalSearchParams<{ serverId?: string; url?: string; secret?: string }>();
   const { addServer, updateServer, getServer } = useStorage();
 
   const [name, setName] = useState('');
@@ -32,13 +32,28 @@ export default function AddServerScreen() {
     }
   }, [existingServer]);
 
-  /** Auto-derive ttydUrl when apiUrl changes (same host, port 7681). */
+  // Pre-fill from deep link: nomadflowcode://connect?url=...&secret=...
+  useEffect(() => {
+    if (params.url && !isEditing) {
+      handleApiUrlChange(params.url);
+      if (params.secret) setAuthToken(params.secret);
+      // Auto-generate a name from the URL hostname
+      try {
+        const hostname = new URL(params.url).hostname;
+        setName(hostname.split('.')[0]);
+      } catch {
+        // ignore
+      }
+    }
+  }, [params.url, params.secret]);
+
+  /** Auto-derive ttydUrl from apiUrl: {apiUrl}/terminal (proxied through the server). */
   const handleApiUrlChange = (value: string) => {
     setApiUrl(value);
     try {
       const url = new URL(value);
-      url.port = '7681';
-      url.pathname = '/';
+      // Terminal is now proxied through the API server at /terminal
+      url.pathname = '/terminal';
       setTtydUrl(url.toString().replace(/\/$/, ''));
     } catch {
       // Keep current ttydUrl if apiUrl is not yet valid
@@ -137,7 +152,7 @@ export default function AddServerScreen() {
               <View className="gap-2">
                 <Label nativeID="ttydUrl">URL Terminal (ttyd)</Label>
                 <Input
-                  placeholder="http://192.168.1.100:7681"
+                  placeholder="http://192.168.1.100:8080/terminal"
                   value={ttydUrl}
                   onChangeText={setTtydUrl}
                   autoCapitalize="none"
@@ -146,7 +161,7 @@ export default function AddServerScreen() {
                   aria-labelledby="ttydUrl"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  Se remplit automatiquement depuis l'URL API (port 7681 par défaut).
+                  Se remplit automatiquement depuis l'URL API (/terminal par défaut).
                 </Text>
               </View>
 
