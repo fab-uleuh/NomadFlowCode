@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>nomadflowcode</string>
+    <string>NomadFlow</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>nomadflowcode</string>
-          <string>com.kawantech.nomadflowcode</string>
+          <string>com.fab-uleuh.nomadflowcode</string>
         </array>
       </dict>
     </array>

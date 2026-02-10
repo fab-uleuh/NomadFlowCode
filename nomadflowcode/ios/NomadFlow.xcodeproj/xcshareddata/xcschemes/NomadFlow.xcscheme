@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "nomadflowcode.app"
-               BlueprintName = "nomadflowcode"
-               ReferencedContainer = "container:nomadflowcode.xcodeproj">
+               BuildableName = "NomadFlow.app"
+               BlueprintName = "NomadFlow"
+               ReferencedContainer = "container:NomadFlow.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "nomadflowcodeTests.xctest"
-               BlueprintName = "nomadflowcodeTests"
-               ReferencedContainer = "container:nomadflowcode.xcodeproj">
+               BuildableName = "NomadFlowTests.xctest"
+               BlueprintName = "NomadFlowTests"
+               ReferencedContainer = "container:NomadFlow.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "nomadflowcode.app"
-            BlueprintName = "nomadflowcode"
-            ReferencedContainer = "container:nomadflowcode.xcodeproj">
+            BuildableName = "NomadFlow.app"
+            BlueprintName = "NomadFlow"
+            ReferencedContainer = "container:NomadFlow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "nomadflowcode.app"
-            BlueprintName = "nomadflowcode"
-            ReferencedContainer = "container:nomadflowcode.xcodeproj">
+            BuildableName = "NomadFlow.app"
+            BlueprintName = "NomadFlow"
+            ReferencedContainer = "container:NomadFlow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

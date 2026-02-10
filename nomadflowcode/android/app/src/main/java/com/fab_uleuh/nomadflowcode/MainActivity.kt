@@ -1,4 +1,4 @@
-package com.kawantech.nomadflowcode
+package com.fab_uleuh.nomadflowcode
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

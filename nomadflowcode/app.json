@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "nomadflowcode",
+    "name": "NomadFlow",
     "slug": "nomadflowcode",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -24,7 +24,7 @@
           "NSAllowsLocalNetworking": true
         }
       },
-      "bundleIdentifier": "com.kawantech.nomadflowcode"
+      "bundleIdentifier": "com.fab-uleuh.nomadflowcode"
     },
     "android": {
       "edgeToEdgeEnabled": true,
@@ -32,16 +32,14 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f0f17"
       },
-      "package": "com.kawantech.nomadflowcode"
+      "package": "com.fab_uleuh.nomadflowcode"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/eae4c0ae-82cd-4bfc-bc0f-5cc413b80b82"
     },

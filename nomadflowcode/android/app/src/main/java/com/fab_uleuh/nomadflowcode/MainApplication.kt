@@ -1,4 +1,4 @@
-package com.kawantech.nomadflowcode
+package com.fab_uleuh.nomadflowcode
 
 import android.app.Application
 import android.content.res.Configuration
