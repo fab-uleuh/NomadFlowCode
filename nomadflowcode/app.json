@@ -30,7 +30,7 @@
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0f0f17"
       },
       "package": "com.kawantech.nomadflowcode"
     },
@@ -39,12 +39,26 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/eae4c0ae-82cd-4bfc-bc0f-5cc413b80b82"
+    },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "eae4c0ae-82cd-4bfc-bc0f-5cc413b80b82"
+      }
+    },
+    "owner": "nomadflowcode"
   }
 }

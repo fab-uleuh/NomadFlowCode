@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use axum::{middleware, Router};
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -53,8 +54,32 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+/// Spawn a task that listens for Ctrl+C and SIGTERM, then cancels the token.
+pub fn spawn_signal_handler(shutdown: CancellationToken) {
+    tokio::spawn(async move {
+        let ctrl_c = tokio::signal::ctrl_c();
+        #[cfg(unix)]
+        {
+            let mut sigterm =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("failed to register SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => info!("Received Ctrl+C, shutting down…"),
+                _ = sigterm.recv() => info!("Received SIGTERM, shutting down…"),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            ctrl_c.await.ok();
+            info!("Received Ctrl+C, shutting down…");
+        }
+        shutdown.cancel();
+    });
+}
+
 /// Run the HTTP server (with tmux session setup and ttyd startup).
-pub async fn serve(settings: Settings) -> color_eyre::Result<()> {
+/// The server shuts down gracefully when `shutdown` is cancelled.
+pub async fn serve(settings: Settings, shutdown: CancellationToken) -> color_eyre::Result<()> {
     // 1. Ensure tmux session exists (ttyd needs it)
     let tmux = TmuxService::new(&settings.tmux.session);
     if let Err(e) = tmux.ensure_session().await {
@@ -78,11 +103,14 @@ pub async fn serve(settings: Settings) -> color_eyre::Result<()> {
     info!(%addr, "NomadFlow server listening");
 
     let listener = TcpListener::bind(&addr).await?;
-    let result = axum::serve(listener, router).await;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown.cancelled_owned())
+        .await?;
 
-    // Cleanup: stop ttyd on shutdown
+    // Cleanup: stop ttyd after graceful shutdown
+    info!("Stopping ttyd…");
     ttyd.stop().await;
+    info!("Server stopped");
 
-    result?;
     Ok(())
 }

@@ -9,8 +9,10 @@ The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP ser
 
 | Command | Behavior |
 |---------|----------|
-| `nomadflow` | Starts the server in the background, then launches the TUI wizard. Server stops when TUI exits. |
-| `nomadflow serve` | Server-only mode with full tracing/logging. Ideal for headless or Docker deployments. |
+| `nomadflow` | Starts the server in the background, then launches the TUI wizard. Server stops gracefully when TUI exits. |
+| `nomadflow serve` | Server-only mode in foreground with full tracing/logging. Ideal for headless or Docker deployments. Handles Ctrl+C and SIGTERM gracefully. |
+| `nomadflow start` | Starts the server as a background daemon. PID file: `~/.nomadflowcode/nomadflow.pid`, logs: `~/.nomadflowcode/nomadflow.log`. |
+| `nomadflow stop` | Stops the background daemon via SIGTERM (graceful shutdown). |
 
 ## Startup sequence
 
@@ -22,6 +24,17 @@ When the server starts, it:
 4. **Starts ttyd** — spawns a ttyd subprocess attached to the tmux session on the configured port (default 7681).
 5. **Binds the HTTP server** on the configured host and port (default `0.0.0.0:8080`).
 
+## Graceful shutdown
+
+The server supports graceful shutdown via `CancellationToken`. When a shutdown signal is received (Ctrl+C, SIGTERM, or programmatic cancellation):
+
+1. The HTTP server **stops accepting new connections**.
+2. In-flight requests are allowed to **complete**.
+3. The **ttyd subprocess is stopped** — no orphan processes left behind.
+4. The server exits cleanly.
+
+This applies to all modes: `serve` (foreground), `start`/`stop` (daemon), and the default TUI mode.
+
 ## Routes
 
 - `GET /health` — health check (no auth)
@@ -32,13 +45,26 @@ See [API Reference](/docs/server/api) for full details.
 
 ## Deployment
 
-### Bare metal
+### Bare metal (foreground)
 
 ```bash
 nomadflow serve
 ```
 
 Set `RUST_LOG=nomadflow_server=debug` for verbose logging.
+
+### Bare metal (daemon)
+
+```bash
+# Start
+nomadflow start
+
+# Check status
+nomadflow --status
+
+# Stop
+nomadflow stop
+```
 
 ### Systemd
 

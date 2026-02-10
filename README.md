@@ -81,15 +81,23 @@ cargo install --path .
 # Launch the TUI wizard (server + interactive interface)
 nomadflow
 
-# Launch HTTP server only (headless/Docker mode)
+# Launch HTTP server in foreground (headless/Docker mode)
 nomadflow serve
 
-# Display tmux status
+# Start the server as a background daemon
+nomadflow start
+
+# Stop the background daemon
+nomadflow stop
+
+# Display tmux and daemon status
 nomadflow --status
 
 # Attach directly to a session
 nomadflow --attach <feature>
 ```
+
+The server handles **graceful shutdown**: on Ctrl+C or SIGTERM, it stops accepting new connections, completes in-flight requests, then cleanly stops the ttyd subprocess (no orphan processes).
 
 ### Configuration
 
@@ -181,34 +189,15 @@ npm run android
 
 ```
 NomadFlowCode/
-├── src/
-│   ├── App.tsx                 # Entry point
-│   ├── screens/
-│   │   ├── ServersScreen.tsx   # Server list
-│   │   ├── AddServerScreen.tsx # Add/edit server
-│   │   ├── ReposScreen.tsx     # Repository list
-│   │   ├── FeaturesScreen.tsx  # Feature list
-│   │   ├── TerminalScreen.tsx  # Terminal WebView
-│   │   └── SettingsScreen.tsx  # Settings
-│   ├── context/
-│   │   ├── ThemeContext.tsx    # Dark/light theme
-│   │   └── StorageContext.tsx  # Local persistence
-│   ├── utils/
-│   │   ├── terminalHTML.ts     # xterm.js HTML
-│   │   └── serverCommands.ts   # Server communication
-│   └── types/
-│       └── index.ts            # TypeScript types
-├── server-scripts/
-│   ├── install.sh              # Server installation
-│   ├── uninstall.sh            # Server uninstallation
-│   ├── start-server.sh         # Start ttyd+tmux
-│   ├── list-repos.sh           # List repos (JSON)
-│   ├── list-features.sh        # List features (JSON)
-│   ├── create-feature.sh       # Create worktree
-│   ├── delete-feature.sh       # Delete worktree
-│   └── switch-feature.sh       # Switch feature
-├── package.json
-├── tsconfig.json
+├── nomadflow-rs/               # Rust binary (single binary: server + TUI)
+│   ├── src/main.rs             # Entry point, CLI, daemon mode
+│   ├── crates/
+│   │   ├── nomadflow-core/     # Config, models, shell, git/tmux/ttyd services
+│   │   ├── nomadflow-server/   # Axum HTTP server with auth middleware
+│   │   └── nomadflow-tui/      # Ratatui TUI wizard
+│   └── Cargo.toml
+├── nomadflowcode/              # React Native/Expo mobile app
+├── docs/                       # Documentation site (Next.js/fumadocs)
 └── README.md
 ```
 

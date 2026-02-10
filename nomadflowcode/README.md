@@ -60,6 +60,34 @@ To dive deeper into the technologies used:
 - [Nativewind Docs](https://www.nativewind.dev/)
 - [React Native Reusables](https://reactnativereusables.com)
 
+## OTA Updates (EAS Update)
+
+The app uses [EAS Update](https://docs.expo.dev/eas-update/introduction/) to push JS/asset updates without going through the stores.
+
+Update checks run automatically on app launch (skipped in dev mode).
+
+### Publish an update
+
+```bash
+# Preview
+eas update --channel preview --message "description"
+
+# Production
+eas update --channel production --message "description"
+```
+
+### Build profiles
+
+| Profile       | Channel       | Distribution |
+|---------------|---------------|--------------|
+| `development` | `development` | `internal`   |
+| `preview`     | `preview`     | `internal`   |
+| `production`  | `production`  | store        |
+
+### Runtime version
+
+Uses the `appVersion` policy: each store version (`app.json` > `version`) gets its own OTA update channel.
+
 ## Deploy with EAS
 
 The easiest way to deploy your app is with [Expo Application Services (EAS)](https://expo.dev/eas).

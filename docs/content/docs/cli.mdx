@@ -19,7 +19,7 @@ nomadflow [OPTIONS] [COMMAND]
 nomadflow
 ```
 
-Starts the HTTP server in the background, then launches the **TUI wizard**. When the TUI exits, the server is stopped. If the TUI returns a tmux session to attach to, `tmux attach-session` is executed automatically.
+Starts the HTTP server in the background, then launches the **TUI wizard**. When the TUI exits, the server is gracefully shut down (ttyd is cleanly stopped, no orphan processes). If the TUI returns a tmux session to attach to, `tmux attach-session` is executed automatically.
 
 ### `serve`
 
@@ -27,7 +27,27 @@ Starts the HTTP server in the background, then launches the **TUI wizard**. When
 nomadflow serve
 ```
 
-Runs the HTTP server in the foreground with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services.
+Runs the HTTP server in the **foreground** with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services.
+
+The server handles **graceful shutdown**: on `Ctrl+C` or `SIGTERM`, it stops accepting new connections, completes in-flight requests, then cleanly stops the ttyd subprocess.
+
+### `start`
+
+```bash
+nomadflow start
+```
+
+Starts the server as a **background daemon**. The process is detached, and its PID is written to `~/.nomadflowcode/nomadflow.pid`. Logs are written to `~/.nomadflowcode/nomadflow.log`.
+
+If a daemon is already running (PID file exists and process is alive), the command prints a message and exits without spawning a duplicate.
+
+### `stop`
+
+```bash
+nomadflow stop
+```
+
+Stops the background daemon. Reads the PID file, sends `SIGTERM` to trigger graceful shutdown, and waits for the process to exit (up to 10 seconds). If the process does not exit in time, `SIGKILL` is sent. The PID file is removed after the process exits.
 
 ## Options
 
@@ -37,7 +57,7 @@ Runs the HTTP server in the foreground with full tracing/logging enabled. Use th
 nomadflow --status
 ```
 
-Displays the current tmux session status and exits. Shows whether the managed tmux session exists and its windows.
+Displays the current **daemon status** (running/not running, PID) and the **tmux session status** (windows, features), then exits.
 
 ### `--attach <feature>`
 
@@ -45,7 +65,7 @@ Displays the current tmux session status and exits. Shows whether the managed tm
 nomadflow --attach my-feature
 ```
 
-Starts the server briefly, then attaches directly to the tmux session. Useful for quickly jumping into a running session from the command line.
+Starts the server briefly, then attaches directly to the tmux session. The server is gracefully shut down before attaching. Useful for quickly jumping into a running session from the command line.
 
 ## TUI wizard
 
@@ -57,6 +77,13 @@ When running in default mode, the TUI provides an interactive terminal interface
 - **Feature browser** — list, create, and switch feature branches
 
 The TUI is built with [ratatui](https://ratatui.rs) and exits cleanly, handing off to `tmux attach` if a session was selected.
+
+## Daemon files
+
+| File | Description |
+|------|-------------|
+| `~/.nomadflowcode/nomadflow.pid` | PID of the running daemon process |
+| `~/.nomadflowcode/nomadflow.log` | Stdout/stderr of the daemon process |
 
 ## Environment variables
 

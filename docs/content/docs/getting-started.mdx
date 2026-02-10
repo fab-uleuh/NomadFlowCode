@@ -58,8 +58,14 @@ secret = "your-secret-token"
 # Default mode: starts the server + TUI wizard
 nomadflow
 
-# Server-only mode (headless/Docker)
+# Server-only mode in foreground (headless/Docker)
 nomadflow serve
+
+# Or run as a background daemon
+nomadflow start
+
+# Stop the daemon later with
+nomadflow stop
 ```
 
 ### 3. Connect from your phone

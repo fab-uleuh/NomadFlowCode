@@ -14,6 +14,7 @@ import {
   PencilIcon,
 } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
+import Constants from 'expo-constants';
 import * as React from 'react';
 import { FlatList, Pressable, View, Alert } from 'react-native';
 
@@ -172,6 +173,10 @@ export default function ServersScreen() {
             </Button>
           </Link>
         )}
+
+        <Text className="absolute bottom-4 left-4 text-xs text-muted-foreground/50">
+          v{Constants.expoConfig?.version ?? ''}
+        </Text>
       </View>
     </>
   );
