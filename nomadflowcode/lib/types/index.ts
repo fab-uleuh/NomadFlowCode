@@ -61,3 +61,11 @@ export interface SwitchFeatureParams {
   launchAgent?: boolean;
   agentCommand?: string;
 }
+
+export interface TerminalShortcut {
+  id: string;
+  label: string;
+  command: string;
+  autoExecute: boolean;
+  order: number;
+}

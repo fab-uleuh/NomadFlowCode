@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
 import type { Server, Repository, Feature } from '@shared';
-import type { AppSettings } from '../types';
+import type { AppSettings, TerminalShortcut } from '../types';
 
 /** Derive ttydUrl from apiUrl (same host, port 7681). */
 function deriveTtydUrl(apiUrl: string): string {
@@ -81,6 +81,7 @@ interface StorageContextType {
   recentFeatures: Feature[];
   lastSelection: LastSelection;
   settings: AppSettings;
+  terminalShortcuts: TerminalShortcut[];
   isLoading: boolean;
 
   // Server operations
@@ -98,6 +99,11 @@ interface StorageContextType {
 
   // Settings
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
+
+  // Terminal shortcuts
+  addTerminalShortcut: (shortcut: Omit<TerminalShortcut, 'id'>) => Promise<TerminalShortcut>;
+  updateTerminalShortcut: (id: string, updates: Partial<TerminalShortcut>) => Promise<void>;
+  deleteTerminalShortcut: (id: string) => Promise<void>;
 
   // Utility
   clearAllData: () => Promise<void>;
@@ -120,6 +126,7 @@ const STORAGE_KEYS = {
   RECENT_FEATURES: '@nomadflow_recent_features',
   LAST_SELECTION: '@nomadflow_last_selection',
   SETTINGS: '@nomadflow_settings',
+  TERMINAL_SHORTCUTS: '@nomadflow_terminal_shortcuts',
 };
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -134,6 +141,7 @@ export function StorageProvider({ children }: StorageProviderProps) {
   const [recentFeatures, setRecentFeatures] = useState<Feature[]>([]);
   const [lastSelection, setLastSelection] = useState<LastSelection>({});
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [terminalShortcuts, setTerminalShortcuts] = useState<TerminalShortcut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -142,13 +150,14 @@ export function StorageProvider({ children }: StorageProviderProps) {
 
   const loadAllData = async () => {
     try {
-      const [serversData, recentReposData, recentFeaturesData, lastSelectionData, settingsData] =
+      const [serversData, recentReposData, recentFeaturesData, lastSelectionData, settingsData, shortcutsData] =
         await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.SERVERS),
           AsyncStorage.getItem(STORAGE_KEYS.RECENT_REPOS),
           AsyncStorage.getItem(STORAGE_KEYS.RECENT_FEATURES),
           AsyncStorage.getItem(STORAGE_KEYS.LAST_SELECTION),
           AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
+          AsyncStorage.getItem(STORAGE_KEYS.TERMINAL_SHORTCUTS),
         ]);
 
       if (serversData) {
@@ -164,6 +173,7 @@ export function StorageProvider({ children }: StorageProviderProps) {
       if (recentFeaturesData) setRecentFeatures(JSON.parse(recentFeaturesData));
       if (lastSelectionData) setLastSelection(JSON.parse(lastSelectionData));
       if (settingsData) setSettings({ ...defaultSettings, ...JSON.parse(settingsData) });
+      if (shortcutsData) setTerminalShortcuts(JSON.parse(shortcutsData));
     } catch (error) {
       console.error('Failed to load storage data:', error);
     } finally {
@@ -270,6 +280,50 @@ export function StorageProvider({ children }: StorageProviderProps) {
     [settings]
   );
 
+  const addTerminalShortcut = useCallback(
+    async (shortcutData: Omit<TerminalShortcut, 'id'>): Promise<TerminalShortcut> => {
+      const newShortcut: TerminalShortcut = { ...shortcutData, id: generateId() };
+      const updated = await new Promise<TerminalShortcut[]>((resolve) => {
+        setTerminalShortcuts((prev) => {
+          const next = [...prev, newShortcut];
+          resolve(next);
+          return next;
+        });
+      });
+      await AsyncStorage.setItem(STORAGE_KEYS.TERMINAL_SHORTCUTS, JSON.stringify(updated));
+      return newShortcut;
+    },
+    []
+  );
+
+  const updateTerminalShortcut = useCallback(
+    async (id: string, updates: Partial<TerminalShortcut>): Promise<void> => {
+      const updated = await new Promise<TerminalShortcut[]>((resolve) => {
+        setTerminalShortcuts((prev) => {
+          const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s));
+          resolve(next);
+          return next;
+        });
+      });
+      await AsyncStorage.setItem(STORAGE_KEYS.TERMINAL_SHORTCUTS, JSON.stringify(updated));
+    },
+    []
+  );
+
+  const deleteTerminalShortcut = useCallback(
+    async (id: string): Promise<void> => {
+      const updated = await new Promise<TerminalShortcut[]>((resolve) => {
+        setTerminalShortcuts((prev) => {
+          const next = prev.filter((s) => s.id !== id);
+          resolve(next);
+          return next;
+        });
+      });
+      await AsyncStorage.setItem(STORAGE_KEYS.TERMINAL_SHORTCUTS, JSON.stringify(updated));
+    },
+    []
+  );
+
   const clearAllData = useCallback(async (): Promise<void> => {
     await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
     setServers([]);
@@ -277,6 +331,7 @@ export function StorageProvider({ children }: StorageProviderProps) {
     setRecentFeatures([]);
     setLastSelection({});
     setSettings(defaultSettings);
+    setTerminalShortcuts([]);
   }, []);
 
   return (
@@ -287,6 +342,7 @@ export function StorageProvider({ children }: StorageProviderProps) {
         recentFeatures,
         lastSelection,
         settings,
+        terminalShortcuts,
         isLoading,
         addServer,
         updateServer,
@@ -296,6 +352,9 @@ export function StorageProvider({ children }: StorageProviderProps) {
         addRecentFeature,
         saveLastSelection,
         updateSettings,
+        addTerminalShortcut,
+        updateTerminalShortcut,
+        deleteTerminalShortcut,
         clearAllData,
       }}>
       {children}

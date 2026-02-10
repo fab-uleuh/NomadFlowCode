@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
+import { ShortcutQuickBar, ShortcutFormModal, ShortcutsSection } from '@/components/terminal-shortcuts';
 import { useStorage } from '@/lib/context/storage-context';
 import { switchToFeature } from '@/lib/server-commands';
 import type { SwitchFeatureResult } from '@shared';
-import type { ConnectionState } from '@/lib/types';
+import type { ConnectionState, TerminalShortcut } from '@/lib/types';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeftIcon,
@@ -147,7 +148,7 @@ export default function TerminalScreen() {
     featureName: string;
   }>();
 
-  const { getServer, settings, updateSettings, updateServer, recentFeatures } = useStorage();
+  const { getServer, settings, updateSettings, updateServer, recentFeatures, terminalShortcuts, addTerminalShortcut, updateTerminalShortcut, deleteTerminalShortcut } = useStorage();
 
   const server = getServer(params.serverId);
   const featureName = params.featureName;
@@ -175,6 +176,8 @@ export default function TerminalScreen() {
   const [isPreparingTerminal, setIsPreparingTerminal] = useState(true);
   const [actualWorktreePath, setActualWorktreePath] = useState<string | null>(null);
   const [hasRunningProcess, setHasRunningProcess] = useState(false);
+  const [shortcutModalVisible, setShortcutModalVisible] = useState(false);
+  const [editingShortcut, setEditingShortcut] = useState<TerminalShortcut | null>(null);
 
   // Prépare le terminal (switch feature via API)
   useEffect(() => {
@@ -297,6 +300,38 @@ export default function TerminalScreen() {
     setTimeout(() => webViewRef.current?.reload(), settings.reconnectDelay);
   }, [connectionState.reconnectAttempts, settings]);
 
+  const executeShortcut = useCallback((shortcut: TerminalShortcut) => {
+    sendToTerminal(shortcut.command + (shortcut.autoExecute ? '\n' : ''));
+  }, [sendToTerminal]);
+
+  const handleAddShortcut = useCallback(() => {
+    setEditingShortcut(null);
+    setShortcutModalVisible(true);
+  }, []);
+
+  const handleEditShortcut = useCallback((shortcut: TerminalShortcut) => {
+    setEditingShortcut(shortcut);
+    setShortcutModalVisible(true);
+  }, []);
+
+  const handleSaveShortcut = useCallback(async (data: { label: string; command: string; autoExecute: boolean }) => {
+    if (editingShortcut) {
+      await updateTerminalShortcut(editingShortcut.id, data);
+    } else {
+      await addTerminalShortcut({ ...data, order: terminalShortcuts.length });
+    }
+    setShortcutModalVisible(false);
+    setEditingShortcut(null);
+  }, [editingShortcut, terminalShortcuts.length, addTerminalShortcut, updateTerminalShortcut]);
+
+  const handleDeleteShortcut = useCallback(async () => {
+    if (editingShortcut) {
+      await deleteTerminalShortcut(editingShortcut.id);
+      setShortcutModalVisible(false);
+      setEditingShortcut(null);
+    }
+  }, [editingShortcut, deleteTerminalShortcut]);
+
   if (!server) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -383,6 +418,14 @@ export default function TerminalScreen() {
           <Icon as={KeyboardIcon} size={22} />
         </Button>
       </Animated.View>
+
+      {/* Quick Bar */}
+      <ShortcutQuickBar
+        shortcuts={terminalShortcuts}
+        onExecute={executeShortcut}
+        onAdd={handleAddShortcut}
+        onEdit={handleEditShortcut}
+      />
 
       {/* Terminal WebView */}
       <View className="flex-1">
@@ -488,7 +531,7 @@ export default function TerminalScreen() {
         </View>
 
         <Text className="mb-2 text-xs text-muted-foreground">tmux (Ctrl-b + ...)</Text>
-        <View className="flex-row flex-wrap">
+        <View className="mb-4 flex-row flex-wrap">
           {TMUX_SHORTCUTS.map((s) => (
             <Pressable key={s.key} onPress={() => sendTmuxKey(s.key)} className="w-1/4 items-center p-2">
               <View className="mb-1 h-10 w-10 items-center justify-center rounded-lg bg-background">
@@ -499,7 +542,23 @@ export default function TerminalScreen() {
             </Pressable>
           ))}
         </View>
+
+        <ShortcutsSection
+          shortcuts={terminalShortcuts}
+          onExecute={executeShortcut}
+          onAdd={handleAddShortcut}
+          onEdit={handleEditShortcut}
+        />
       </Animated.View>
+
+      {/* Shortcut Form Modal */}
+      <ShortcutFormModal
+        visible={shortcutModalVisible}
+        shortcut={editingShortcut}
+        onSave={handleSaveShortcut}
+        onDelete={editingShortcut ? handleDeleteShortcut : undefined}
+        onClose={() => { setShortcutModalVisible(false); setEditingShortcut(null); }}
+      />
     </SafeAreaView>
   );
 }
