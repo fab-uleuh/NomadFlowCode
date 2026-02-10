@@ -4,8 +4,20 @@ import React, { createContext, useContext, useState, useEffect, useCallback, typ
 import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings } from '../types';
 
+/** Derive ttydUrl from apiUrl (same host, port 7681). */
+function deriveTtydUrl(apiUrl: string): string {
+  try {
+    const url = new URL(apiUrl);
+    url.port = '7681';
+    url.pathname = '/';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return 'http://localhost:7681';
+  }
+}
+
 /**
- * Migrate old server formats to current format (apiUrl only).
+ * Migrate old server formats to current format.
  * Handles: old 'url' (WebSocket) field, old 'ttydUrl' field.
  */
 function migrateServer(server: any): Server {
@@ -13,46 +25,47 @@ function migrateServer(server: any): Server {
     id: server.id,
     name: server.name,
     apiUrl: server.apiUrl,
+    ttydUrl: server.ttydUrl,
     authToken: server.authToken,
     lastConnected: server.lastConnected,
   };
 
-  // Already has apiUrl — done
-  if (migrated.apiUrl) {
-    return migrated;
-  }
-
-  // Derive apiUrl from old ttydUrl field
-  const ttydUrl = server.ttydUrl || '';
-  if (ttydUrl) {
-    try {
-      const url = new URL(ttydUrl);
-      url.port = url.port === '7681' ? '8080' : url.port;
-      migrated.apiUrl = url.toString().replace(/\/$/, '');
-    } catch {
-      migrated.apiUrl = ttydUrl.replace(':7681', ':8080');
+  // Derive apiUrl from old fields if missing
+  if (!migrated.apiUrl) {
+    const ttydUrl = server.ttydUrl || '';
+    if (ttydUrl) {
+      try {
+        const url = new URL(ttydUrl);
+        url.port = url.port === '7681' ? '8080' : url.port;
+        migrated.apiUrl = url.toString().replace(/\/$/, '');
+      } catch {
+        migrated.apiUrl = ttydUrl.replace(':7681', ':8080');
+      }
+    } else {
+      const oldUrl = server.url || '';
+      if (oldUrl) {
+        const httpUrl = oldUrl
+          .replace('wss://', 'https://')
+          .replace('ws://', 'http://')
+          .replace('/ws', '');
+        try {
+          const url = new URL(httpUrl);
+          url.port = url.port === '7681' ? '8080' : url.port;
+          migrated.apiUrl = url.toString().replace(/\/$/, '');
+        } catch {
+          migrated.apiUrl = httpUrl.replace(':7681', ':8080');
+        }
+      } else {
+        migrated.apiUrl = 'http://localhost:8080';
+      }
     }
-    return migrated;
   }
 
-  // Derive from old 'url' (WebSocket) field
-  const oldUrl = server.url || '';
-  if (oldUrl) {
-    const httpUrl = oldUrl
-      .replace('wss://', 'https://')
-      .replace('ws://', 'http://')
-      .replace('/ws', '');
-    try {
-      const url = new URL(httpUrl);
-      url.port = url.port === '7681' ? '8080' : url.port;
-      migrated.apiUrl = url.toString().replace(/\/$/, '');
-    } catch {
-      migrated.apiUrl = httpUrl.replace(':7681', ':8080');
-    }
-    return migrated;
+  // Ensure ttydUrl is set (derive from apiUrl if missing)
+  if (!migrated.ttydUrl) {
+    migrated.ttydUrl = deriveTtydUrl(migrated.apiUrl!);
   }
 
-  migrated.apiUrl = 'http://localhost:8080';
   return migrated;
 }
 

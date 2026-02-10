@@ -1,13 +1,29 @@
 ---
-title: Hello World
-description: Your first document
+title: Introduction
+description: NomadFlowCode — manage git worktrees and tmux sessions from your phone.
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+NomadFlowCode is an open-source tool that lets you manage **git worktrees** and **tmux sessions** from a mobile app. It ships as a single Rust binary that runs on your development server, paired with a React Native app for on-the-go access.
 
-## What is Next?
+## How it works
+
+1. **Server** — The `nomadflow` binary starts an HTTP API server, a tmux session, and a [ttyd](https://github.com/tsl0922/ttyd) process on your dev machine.
+2. **Mobile app** — The Expo/React Native app connects to your server, lets you browse repos, create/switch feature branches (as git worktrees), and open a full terminal.
+3. **Worktrees + tmux** — Each feature branch gets its own worktree directory and a dedicated tmux window. Switching features is instant — no stashing, no context loss.
+
+## Key features
+
+- **Single binary** — server, WebSocket proxy, and TUI wizard in one `nomadflow` executable.
+- **Git worktrees** — isolated working directories per feature branch.
+- **Tmux integration** — one tmux window per feature, automatic session management.
+- **Mobile terminal** — full terminal access via ttyd, with WebSocket proxy for iOS compatibility.
+- **Bearer token auth** — simple shared-secret authentication for the API and terminal.
+
+## Quick links
 
 <Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card title="Getting Started" href="/docs/getting-started" />
+  <Card title="Concepts" href="/docs/concepts" />
+  <Card title="API Reference" href="/docs/server/api" />
+  <Card title="CLI Reference" href="/docs/cli" />
 </Cards>

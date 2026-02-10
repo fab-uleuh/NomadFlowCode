@@ -1,0 +1,193 @@
+---
+title: API Reference
+description: Complete HTTP API reference for the NomadFlowCode server.
+---
+
+All API endpoints (except `/health`) require a `Authorization: Bearer <token>` header when `auth.secret` is configured. All request and response bodies use JSON with **camelCase** field names.
+
+## Health check
+
+### `GET /health`
+
+No authentication required.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "tmuxSession": "nomadflow",
+  "apiPort": 8080
+}
+```
+
+## Repositories
+
+### `POST /api/list-repos`
+
+List all repositories managed by NomadFlowCode.
+
+**Request body:** none (empty or `{}`)
+
+**Response:**
+
+```json
+{
+  "repos": [
+    {
+      "name": "my-project",
+      "path": "/home/user/.nomadflowcode/repos/my-project",
+      "branch": "main"
+    }
+  ]
+}
+```
+
+### `POST /api/clone-repo`
+
+Clone a git repository into NomadFlowCode's managed directory.
+
+**Request body:**
+
+```json
+{
+  "url": "https://github.com/user/repo.git",
+  "token": "ghp_xxxx",
+  "name": "custom-name"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | Git clone URL |
+| `token` | string | no | Git credential token (inserted into the URL for HTTPS clones) |
+| `name` | string | no | Custom name for the repository directory |
+
+**Response:**
+
+```json
+{
+  "name": "repo",
+  "path": "/home/user/.nomadflowcode/repos/repo",
+  "branch": "main"
+}
+```
+
+## Features
+
+### `POST /api/list-features`
+
+List all features (worktrees) for a repository.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project"
+}
+```
+
+**Response:**
+
+```json
+{
+  "features": [
+    {
+      "name": "feature-a",
+      "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/feature-a",
+      "branch": "feature/feature-a",
+      "isActive": true,
+      "isMain": false
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Feature name |
+| `worktreePath` | string | Absolute path to the worktree directory |
+| `branch` | string | Git branch name |
+| `isActive` | boolean | Whether this feature's tmux window is currently selected |
+| `isMain` | boolean | Whether this is the main/default branch |
+
+### `POST /api/create-feature`
+
+Create a new feature branch with its own worktree and tmux window.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project",
+  "featureName": "my-feature",
+  "baseBranch": "main"
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `repoPath` | string | yes | — | Path to the repository |
+| `featureName` | string | yes | — | Name for the new feature |
+| `baseBranch` | string | no | `"main"` | Branch to base the feature on |
+
+**Response:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "branch": "feature/my-feature",
+  "tmuxWindow": "my-project:my-feature"
+}
+```
+
+### `POST /api/switch-feature`
+
+Switch to an existing feature's tmux window.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project",
+  "featureName": "my-feature"
+}
+```
+
+**Response:**
+
+```json
+{
+  "switched": true,
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "tmuxWindow": "my-project:my-feature",
+  "hasRunningProcess": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `switched` | boolean | Whether the switch was successful |
+| `worktreePath` | string | Path to the worktree |
+| `tmuxWindow` | string | Tmux window name (`repo:feature`) |
+| `hasRunningProcess` | boolean | Whether the tmux window has a running foreground process |
+
+## Terminal WebSocket
+
+### `GET /terminal/ws`
+
+WebSocket proxy to the ttyd terminal. This endpoint exists because iOS WKWebView does not send Basic Auth headers on WebSocket upgrade requests.
+
+**Query parameters:**
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `token` | when `auth.secret` is set | The shared secret for authentication |
+
+**Protocol:** The connection uses the `tty` WebSocket subprotocol. Messages are forwarded bidirectionally between the client and the ttyd process.
+
+**Example:**
+
+```
+ws://your-server:8080/terminal/ws?token=your-secret
+```

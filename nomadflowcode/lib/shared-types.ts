@@ -2,6 +2,7 @@ export interface Server {
   id: string;
   name: string;
   apiUrl?: string;
+  ttydUrl?: string;
   authToken?: string;
   lastConnected?: number;
 }

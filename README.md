@@ -1,144 +1,144 @@
-# 🚀 NomadFlow
+# NomadFlow
 
-**Terminal mobile résilient avec assistant IA pour le développement nomade**
+**Resilient mobile terminal with AI assistant for nomad development**
 
-NomadFlow est une application mobile open source (React Native) qui permet d'accéder à un terminal distant résilient, optimisé pour le développement mobile avec assistance IA.
+NomadFlow is an open source mobile application (React Native) that provides access to a resilient remote terminal, optimized for mobile development with AI assistance.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)
 ![React Native](https://img.shields.io/badge/React%20Native-0.73-61dafb.svg)
 
-## ✨ Fonctionnalités
+## Features
 
-### 🎯 Workflow Ultra Fluide
-- **Sélection en 3 étapes** : Serveur → Repo → Feature → Terminal prêt !
-- **Zéro commande manuelle** : l'environnement est automatiquement configuré
-- **Agent IA pré-lancé** : Claude, Ollama ou votre agent personnalisé vous attend
+### Ultra Smooth Workflow
+- **3-step selection**: Server → Repo → Feature → Terminal ready!
+- **Zero manual commands**: the environment is automatically configured
+- **Pre-launched AI agent**: Claude, Ollama or your custom agent awaits you
 
-### 📱 Application Mobile
-- **Compatible iOS et Android** via React Native
-- **Terminal xterm.js** intégré avec rendu natif
-- **Persistance des sessions** grâce à tmux
-- **Mode hors-ligne** avec cache local des sélections récentes
+### Mobile App
+- **iOS and Android compatible** via React Native
+- **Integrated xterm.js terminal** with native rendering
+- **Session persistence** thanks to tmux
+- **Offline mode** with local cache of recent selections
 
-### 🔒 Connexion Sécurisée
-- **WebSocket sécurisé (WSS)** vers votre serveur
-- **Authentification par secret partagé** : protège l'API et le terminal
-- **Auto-reconnexion** intelligente avec backoff
+### Secure Connection
+- **Secure WebSocket (WSS)** to your server
+- **Shared secret authentication**: protects API and terminal
+- **Smart auto-reconnection** with backoff
 
-### 🌿 Gestion des Environnements
-- **Git worktrees** : une branche = un environnement isolé
-- **Sessions tmux** persistantes par feature
-- **Scripts serveur** pour automatiser la création/cleanup
+### Environment Management
+- **Git worktrees**: one branch = one isolated environment
+- **Persistent tmux sessions** per feature
+- **Server scripts** to automate creation/cleanup
 
-## 📸 Screenshots
+## Screenshots
 
 ```
 ┌─────────────────────────────────────────┐
-│  🖥️ Serveurs          ⚙️              │
+│  Servers                    Settings    │
 ├─────────────────────────────────────────┤
 │                                         │
 │  ┌─────────────────────────────────┐   │
-│  │ 🖥️ Mon Serveur Dev              │   │
+│  │ My Dev Server                   │   │
 │  │    wss://192.168.1.100:7681     │   │
-│  │    Connecté il y a 5 min        │   │
+│  │    Connected 5 min ago          │   │
 │  └─────────────────────────────────┘   │
 │                                         │
 │  ┌─────────────────────────────────┐   │
-│  │ 🖥️ Serveur Cloud               │   │
+│  │ Cloud Server                    │   │
 │  │    wss://dev.example.com        │   │
-│  │    Jamais connecté              │   │
+│  │    Never connected              │   │
 │  └─────────────────────────────────┘   │
 │                                         │
 │                              [+]        │
 └─────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### Installation de la CLI
+### CLI Installation
 
-**macOS / Linux :**
+**macOS / Linux:**
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fab-uleuh/NomadFlowCode/releases/latest/download/nomadflow-installer.sh | sh
 ```
 
-**Windows (PowerShell) :**
+**Windows (PowerShell):**
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/fab-uleuh/NomadFlowCode/releases/latest/download/nomadflow-installer.ps1 | iex"
 ```
 
-**Depuis les sources (nécessite Rust) :**
+**From source (requires Rust):**
 ```bash
 git clone https://github.com/fab-uleuh/NomadFlowCode.git
 cd NomadFlowCode/nomadflow-rs
 cargo install --path .
 ```
 
-### Utilisation
+### Usage
 
 ```bash
-# Lancer le TUI wizard (serveur + interface interactive)
+# Launch the TUI wizard (server + interactive interface)
 nomadflow
 
-# Lancer le serveur HTTP seul (mode headless/Docker)
+# Launch HTTP server only (headless/Docker mode)
 nomadflow serve
 
-# Afficher le statut tmux
+# Display tmux status
 nomadflow --status
 
-# S'attacher directement à une session
+# Attach directly to a session
 nomadflow --attach <feature>
 ```
 
 ### Configuration
 
 ```bash
-# Le fichier de configuration est créé automatiquement au premier lancement
+# The configuration file is automatically created on first launch
 nano ~/.nomadflowcode/config.toml
 ```
 
-### Côté Mobile
+### Mobile Side
 
-1. **Cloner le repo** :
+1. **Clone the repo**:
 ```bash
 git clone https://github.com/fab-uleuh/NomadFlowCode.git
 cd NomadFlowCode
 ```
 
-2. **Installer les dépendances** :
+2. **Install dependencies**:
 ```bash
 npm install
-# ou
+# or
 yarn install
 ```
 
-3. **iOS** :
+3. **iOS**:
 ```bash
 cd ios && pod install && cd ..
 npm run ios
 ```
 
-4. **Android** :
+4. **Android**:
 ```bash
 npm run android
 ```
 
-## 📋 Prérequis
+## Prerequisites
 
-### Serveur
-- Linux/macOS avec accès SSH
-- **ttyd** (terminal web)
-- **tmux** (multiplexeur de terminal)
-- **Git** avec support worktrees
-- Optionnel : **Ollama**, **Claude CLI**, ou autre agent IA
+### Server
+- Linux/macOS with SSH access
+- **ttyd** (web terminal)
+- **tmux** (terminal multiplexer)
+- **Git** with worktree support
+- Optional: **Ollama**, **Claude CLI**, or other AI agent
 
 ### Mobile
 - Node.js 18+
 - React Native CLI
-- Xcode (iOS) ou Android Studio (Android)
+- Xcode (iOS) or Android Studio (Android)
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -177,44 +177,44 @@ npm run android
 └─────────────────────────────────────────────────────────┘
 ```
 
-## 📁 Structure du Projet
+## Project Structure
 
 ```
 NomadFlowCode/
 ├── src/
-│   ├── App.tsx                 # Point d'entrée
+│   ├── App.tsx                 # Entry point
 │   ├── screens/
-│   │   ├── ServersScreen.tsx   # Liste des serveurs
-│   │   ├── AddServerScreen.tsx # Ajout/édition serveur
-│   │   ├── ReposScreen.tsx     # Liste des repos
-│   │   ├── FeaturesScreen.tsx  # Liste des features
+│   │   ├── ServersScreen.tsx   # Server list
+│   │   ├── AddServerScreen.tsx # Add/edit server
+│   │   ├── ReposScreen.tsx     # Repository list
+│   │   ├── FeaturesScreen.tsx  # Feature list
 │   │   ├── TerminalScreen.tsx  # Terminal WebView
-│   │   └── SettingsScreen.tsx  # Paramètres
+│   │   └── SettingsScreen.tsx  # Settings
 │   ├── context/
-│   │   ├── ThemeContext.tsx    # Thème dark/light
-│   │   └── StorageContext.tsx  # Persistance locale
+│   │   ├── ThemeContext.tsx    # Dark/light theme
+│   │   └── StorageContext.tsx  # Local persistence
 │   ├── utils/
-│   │   ├── terminalHTML.ts     # HTML xterm.js
-│   │   └── serverCommands.ts   # Communication serveur
+│   │   ├── terminalHTML.ts     # xterm.js HTML
+│   │   └── serverCommands.ts   # Server communication
 │   └── types/
-│       └── index.ts            # Types TypeScript
+│       └── index.ts            # TypeScript types
 ├── server-scripts/
-│   ├── install.sh              # Installation serveur
-│   ├── uninstall.sh            # Désinstallation serveur
-│   ├── start-server.sh         # Démarrage ttyd+tmux
-│   ├── list-repos.sh           # Liste des repos (JSON)
-│   ├── list-features.sh        # Liste des features (JSON)
-│   ├── create-feature.sh       # Création worktree
-│   ├── delete-feature.sh       # Suppression worktree
-│   └── switch-feature.sh       # Changement de feature
+│   ├── install.sh              # Server installation
+│   ├── uninstall.sh            # Server uninstallation
+│   ├── start-server.sh         # Start ttyd+tmux
+│   ├── list-repos.sh           # List repos (JSON)
+│   ├── list-features.sh        # List features (JSON)
+│   ├── create-feature.sh       # Create worktree
+│   ├── delete-feature.sh       # Delete worktree
+│   └── switch-feature.sh       # Switch feature
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
 
-## ⚙️ Configuration
+## Configuration
 
-### Configuration Serveur (`~/.nomadflowcode/config.toml`)
+### Server Configuration (`~/.nomadflowcode/config.toml`)
 
 ```toml
 [paths]
@@ -229,87 +229,87 @@ port = 7681
 [api]
 port = 8080
 
-# Authentification - décommenter pour activer
-# Le même secret doit être entré dans l'app mobile
+# Authentication - uncomment to enable
+# The same secret must be entered in the mobile app
 # [auth]
-# secret = "votre-secret-ici"
+# secret = "your-secret-here"
 ```
 
-### Configuration App (dans l'app)
+### App Configuration (in-app)
 
-- **Agent IA** : Claude, Ollama, ou commande personnalisée
-- **Auto-lancement agent** : activer/désactiver
-- **Préfixe session tmux** : personnalisable
-- **Thème** : Dark, Light, ou Système
-- **Taille police** : 10-24px
-- **Reconnexion auto** : avec paramètres
+- **AI Agent**: Claude, Ollama, or custom command
+- **Auto-launch agent**: enable/disable
+- **Tmux session prefix**: customizable
+- **Theme**: Dark, Light, or System
+- **Font size**: 10-24px
+- **Auto-reconnection**: with parameters
 
-## 🔐 Sécurité
+## Security
 
-### Authentification par Secret Partagé
+### Shared Secret Authentication
 
-NomadFlow utilise un secret partagé unique qui protège à la fois :
-- **L'API REST** : via Bearer token (Authorization header)
-- **Le terminal ttyd** : via Basic Auth (user: `nomadflow`, password: secret)
+NomadFlow uses a single shared secret that protects both:
+- **The REST API**: via Bearer token (Authorization header)
+- **The ttyd terminal**: via Basic Auth (user: `nomadflow`, password: secret)
 
-#### Activation
+#### Setup
 
-1. **Côté serveur** (`~/.nomadflowcode/config.toml`) :
+1. **Server side** (`~/.nomadflowcode/config.toml`):
 ```toml
 [auth]
-secret = "votre-secret-securise"
+secret = "your-secure-secret"
 ```
 
-2. **Côté mobile** : entrez le même secret dans le champ "Secret d'authentification" lors de la configuration du serveur.
+2. **Mobile side**: enter the same secret in the "Authentication Secret" field when configuring the server.
 
-#### Fonctionnement
+#### How It Works
 
-- **Sans secret** : tout fonctionne sans authentification (développement local)
-- **Avec secret** : l'API retourne 401 sans le bon Bearer token, et ttyd demande les credentials
+- **Without secret**: everything works without authentication (local development)
+- **With secret**: the API returns 401 without the correct Bearer token, and ttyd requires credentials
 
-### Recommandations
+### Recommendations
 
-1. **Utilisez HTTPS/WSS** en production
-2. **Activez l'authentification** avec un secret fort
-3. **Firewall** : n'exposez pas les ports 7681/8080 publiquement sans VPN
-4. **Certificats SSL** : Let's Encrypt ou certificats auto-signés
+1. **Use HTTPS/WSS** in production
+2. **Enable authentication** with a strong secret
+3. **Firewall**: do not expose ports 7681/8080 publicly without a VPN
+4. **SSL certificates**: Let's Encrypt or self-signed certificates
 
-## 🎮 Raccourcis tmux
+## tmux Shortcuts
 
-L'app inclut des boutons overlay pour les raccourcis tmux courants :
+The app includes overlay buttons for common tmux shortcuts:
 
-| Raccourci | Action |
+| Shortcut | Action |
 |-----------|--------|
-| `Ctrl-b w` | Liste des windows |
-| `Ctrl-b c` | Nouvelle window |
-| `Ctrl-b n` | Window suivante |
-| `Ctrl-b p` | Window précédente |
-| `Ctrl-b "` | Split horizontal |
-| `Ctrl-b %` | Split vertical |
-| `Ctrl-b d` | Détacher |
-| `Ctrl-b [` | Mode scroll |
+| `Ctrl-b w` | List windows |
+| `Ctrl-b c` | New window |
+| `Ctrl-b n` | Next window |
+| `Ctrl-b p` | Previous window |
+| `Ctrl-b "` | Horizontal split |
+| `Ctrl-b %` | Vertical split |
+| `Ctrl-b d` | Detach |
+| `Ctrl-b [` | Scroll mode |
 
-## 🤝 Contribution
+## Contributing
 
-Les contributions sont les bienvenues !
+Contributions are welcome!
 
-1. Fork le projet
-2. Créez votre branche (`git checkout -b feature/amazing-feature`)
-3. Committez vos changements (`git commit -m 'Add amazing feature'`)
-4. Pushez (`git push origin feature/amazing-feature`)
-5. Ouvrez une Pull Request
+1. Fork the project
+2. Create your branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📜 License
+## License
 
-MIT License - voir [LICENSE](LICENSE) pour plus de détails.
+MIT License - see [LICENSE](LICENSE) for more details.
 
-## 🙏 Remerciements
+## Acknowledgements
 
-- [ttyd](https://github.com/tsl0922/ttyd) - Terminal web
-- [xterm.js](https://xtermjs.org/) - Émulateur de terminal
-- [tmux](https://github.com/tmux/tmux) - Multiplexeur de terminal
-- [React Native](https://reactnative.dev/) - Framework mobile
+- [ttyd](https://github.com/tsl0922/ttyd) - Web terminal
+- [xterm.js](https://xtermjs.org/) - Terminal emulator
+- [tmux](https://github.com/tmux/tmux) - Terminal multiplexer
+- [React Native](https://reactnative.dev/) - Mobile framework
 
 ---
 
-**Made with ❤️ for nomad developers**
+**Made with love for nomad developers**

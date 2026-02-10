@@ -1,0 +1,91 @@
+---
+title: Contributing
+description: How to contribute to NomadFlowCode.
+---
+
+NomadFlowCode is open source and welcomes contributions. This guide covers the monorepo structure, development setup, and conventions.
+
+## Monorepo structure
+
+```
+NomadFlowCode/
+  nomadflow-rs/        # Rust binary (server + TUI)
+    crates/
+      nomadflow-core/    # config, models, services
+      nomadflow-server/  # axum HTTP server
+      nomadflow-tui/     # ratatui TUI wizard
+    src/main.rs          # binary entry point
+  nomadflowcode/       # React Native/Expo mobile app
+  docs/                # Documentation site (fumadocs/Next.js)
+```
+
+## Development setup
+
+### Rust (server + TUI)
+
+```bash
+cd nomadflow-rs
+cargo build
+cargo test
+```
+
+Requirements: Rust toolchain, tmux, ttyd, git.
+
+### Mobile app
+
+```bash
+cd nomadflowcode
+npm install
+npx expo run:ios    # or run:android
+```
+
+Requirements: Node.js, Expo CLI, Xcode (iOS) or Android Studio.
+
+### Documentation
+
+```bash
+cd docs
+pnpm install
+pnpm dev
+```
+
+The docs site runs at `http://localhost:3000`.
+
+## Conventions
+
+### JSON field naming
+
+All API request/response bodies use **camelCase** field names. Rust structs use `#[serde(rename_all = "camelCase")]` to handle the conversion.
+
+```rust
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Feature {
+    pub worktree_path: String,  // serialized as "worktreePath"
+    pub is_active: bool,        // serialized as "isActive"
+}
+```
+
+### Path comparison
+
+On macOS, `/tmp` is a symlink to `/private/tmp`. Always use `canonicalize()` when comparing paths in tests or runtime logic.
+
+### Tmux test sessions
+
+Tests that create tmux sessions must use unique session names (include the PID) to avoid collisions when running tests in parallel:
+
+```rust
+let session = format!("test-{}", std::process::id());
+```
+
+### Tmux window naming
+
+Windows are named `{repo}:{feature}` to avoid collisions when multiple repos have features with the same name.
+
+## Pull request guidelines
+
+1. **Fork** the repository and create a feature branch.
+2. **Write tests** for new functionality.
+3. **Run the test suite** — `cargo test` in `nomadflow-rs/`.
+4. **Keep commits focused** — one logical change per commit.
+5. **Update documentation** if your change affects the API, CLI, or configuration.

@@ -158,6 +158,7 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: Some("http://myserver:9000".to_string()),
+            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
@@ -169,6 +170,7 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: Some("http://myserver:9000/".to_string()),
+            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
@@ -180,6 +182,7 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: None,
+            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://localhost:8080/api");

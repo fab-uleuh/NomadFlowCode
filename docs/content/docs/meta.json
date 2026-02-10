@@ -1,0 +1,16 @@
+{
+  "root": true,
+  "pages": [
+    "index",
+    "---Getting Started---",
+    "getting-started",
+    "---Concepts---",
+    "concepts",
+    "---Reference---",
+    "server",
+    "cli",
+    "mobile",
+    "---Community---",
+    "contributing"
+  ]
+}

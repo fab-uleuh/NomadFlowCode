@@ -1,0 +1,76 @@
+---
+title: Getting Started
+description: Install NomadFlowCode and run your first session.
+---
+
+## Prerequisites
+
+Make sure the following are installed on your development server:
+
+- **Git** (2.20+) — with worktree support
+- **tmux** (3.0+) — terminal multiplexer
+- **ttyd** (1.7+) — share your terminal over the web
+- **Rust toolchain** — to build from source (or download a prebuilt binary)
+
+## Installation
+
+### From source
+
+```bash
+git clone https://github.com/fab-uleuh/NomadFlowCode.git
+cd NomadFlowCode/nomadflow-rs
+cargo build --release
+```
+
+The binary is at `target/release/nomadflow`. Copy it somewhere in your `$PATH`:
+
+```bash
+cp target/release/nomadflow ~/.local/bin/
+```
+
+## Quick start
+
+### 1. Create a config (optional)
+
+NomadFlowCode works with sensible defaults. To customize, create `~/.nomadflowcode/config.toml`:
+
+```toml
+[paths]
+base_dir = "~/.nomadflowcode"
+
+[tmux]
+session = "nomadflow"
+
+[ttyd]
+port = 7681
+
+[api]
+port = 8080
+host = "0.0.0.0"
+
+[auth]
+secret = "your-secret-token"
+```
+
+### 2. Start the server
+
+```bash
+# Default mode: starts the server + TUI wizard
+nomadflow
+
+# Server-only mode (headless/Docker)
+nomadflow serve
+```
+
+### 3. Connect from your phone
+
+1. Install the NomadFlowCode app (Expo dev build or standalone).
+2. Tap **Add Server**.
+3. Enter your server's URL (e.g. `http://192.168.1.100:8080`) and the auth token.
+4. Browse your repos, create features, and open the terminal.
+
+## What's next?
+
+- [Concepts](/docs/concepts) — understand the architecture
+- [Server Configuration](/docs/server/configuration) — full config reference
+- [CLI Reference](/docs/cli) — all command-line options

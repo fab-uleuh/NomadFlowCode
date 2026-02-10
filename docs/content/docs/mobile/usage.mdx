@@ -1,0 +1,67 @@
+---
+title: Mobile App Usage
+description: Navigate the NomadFlowCode mobile app screens and terminal controls.
+---
+
+## Screen flow
+
+The app follows a drill-down navigation pattern:
+
+```
+Servers → Repos → Features → Terminal
+```
+
+### Servers
+
+The home screen lists your configured servers. Each server shows its name, URL, and connection status. Tap a server to connect and view its repositories.
+
+### Repositories
+
+Lists all git repositories managed by the server (cloned into `~/.nomadflowcode/repos/`). From here you can:
+- Tap a repo to view its features
+- Clone a new repository
+
+### Features
+
+Shows all feature branches (worktrees) for the selected repository. Each feature displays:
+- Branch name
+- Active status (currently selected tmux window)
+- Main branch indicator
+
+Actions:
+- **Tap a feature** — switch to it (selects the tmux window) and open the terminal
+- **Create feature** — enter a name and base branch to create a new worktree
+
+### Terminal
+
+A full terminal session powered by ttyd, displayed in a WebView. The terminal connects to the tmux window for the selected feature.
+
+## Terminal controls
+
+### Zoom
+
+Pinch to zoom in/out on the terminal view.
+
+### Keyboard shortcuts
+
+The terminal supports standard keyboard input. On iOS, you can use an external keyboard for full key support including modifier keys.
+
+### Tmux shortcuts
+
+Since each feature runs in a tmux window, standard tmux key bindings work:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl-b d` | Detach from session |
+| `Ctrl-b n` | Next window |
+| `Ctrl-b p` | Previous window |
+| `Ctrl-b c` | Create new window |
+| `Ctrl-b ,` | Rename window |
+| `Ctrl-b [` | Enter copy mode (scroll) |
+
+## Settings
+
+The app stores server configurations locally. You can:
+- Edit server details (name, URL, token)
+- Remove a server
+- Reorder the server list

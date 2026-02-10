@@ -42,7 +42,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(routes::features::router())
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
-    // WebSocket terminal endpoint uses query param auth (handled in the handler)
+    // WebSocket proxy to ttyd (auth via query param, handled in handler)
     let ws = Router::new().merge(routes::terminal::router());
 
     public

@@ -1,0 +1,61 @@
+---
+title: Server Overview
+description: How the NomadFlowCode server starts and runs.
+---
+
+The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP server that provides the API for managing repos, features, and terminal access.
+
+## Launch modes
+
+| Command | Behavior |
+|---------|----------|
+| `nomadflow` | Starts the server in the background, then launches the TUI wizard. Server stops when TUI exits. |
+| `nomadflow serve` | Server-only mode with full tracing/logging. Ideal for headless or Docker deployments. |
+
+## Startup sequence
+
+When the server starts, it:
+
+1. **Loads configuration** from `~/.nomadflowcode/config.toml` (falls back to defaults).
+2. **Creates directories** — `~/.nomadflowcode/repos/` and `~/.nomadflowcode/worktrees/`.
+3. **Ensures a tmux session** exists (creates one if needed).
+4. **Starts ttyd** — spawns a ttyd subprocess attached to the tmux session on the configured port (default 7681).
+5. **Binds the HTTP server** on the configured host and port (default `0.0.0.0:8080`).
+
+## Routes
+
+- `GET /health` — health check (no auth)
+- `POST /api/*` — repo and feature management (Bearer token auth)
+- `GET /terminal/ws` — WebSocket proxy to ttyd (token query param auth)
+
+See [API Reference](/docs/server/api) for full details.
+
+## Deployment
+
+### Bare metal
+
+```bash
+nomadflow serve
+```
+
+Set `RUST_LOG=nomadflow_server=debug` for verbose logging.
+
+### Systemd
+
+```ini
+[Unit]
+Description=NomadFlowCode Server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/nomadflow serve
+Restart=on-failure
+Environment=RUST_LOG=nomadflow_server=info
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Docker
+
+Ensure the container has `tmux` and `ttyd` installed, and that the tmux session can be created inside the container.

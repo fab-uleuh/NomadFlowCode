@@ -1,0 +1,58 @@
+---
+title: Authentication
+description: How authentication works in NomadFlowCode.
+---
+
+NomadFlowCode uses a simple shared-secret model. A single `auth.secret` value in `config.toml` secures all endpoints.
+
+## Setup
+
+Set the secret in your configuration file:
+
+```toml
+[auth]
+secret = "your-secret-token"
+```
+
+When `secret` is empty (the default), authentication is disabled entirely.
+
+## API authentication
+
+All `/api/*` endpoints require a Bearer token:
+
+```bash
+curl -X POST http://localhost:8080/api/list-repos \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json"
+```
+
+The server middleware checks the `Authorization` header against `auth.secret`. Requests without a valid token receive a `401 Unauthorized` response.
+
+## ttyd authentication
+
+When a secret is configured, ttyd is started with Basic Auth:
+- **Username:** `nomadflow`
+- **Password:** the `auth.secret` value
+
+The mobile app loads the ttyd HTML page directly using a `basicAuthCredential` embedded in the request.
+
+## WebSocket authentication
+
+iOS WKWebView does not send Basic Auth headers on WebSocket upgrade requests. To work around this, the NomadFlowCode server provides a WebSocket proxy at `/terminal/ws` that accepts the token as a query parameter:
+
+```
+ws://your-server:8080/terminal/ws?token=your-secret-token
+```
+
+The server:
+1. Validates the `token` query parameter against `auth.secret`
+2. Opens a WebSocket connection to ttyd with proper Basic Auth headers
+3. Forwards messages bidirectionally between the mobile client and ttyd
+
+## Summary
+
+| Channel | Auth method | Header/param |
+|---------|------------|--------------|
+| API (`/api/*`) | Bearer token | `Authorization: Bearer <secret>` |
+| ttyd HTML | Basic Auth | `nomadflow:<secret>` |
+| WebSocket (`/terminal/ws`) | Query param | `?token=<secret>` |

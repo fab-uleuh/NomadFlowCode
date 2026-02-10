@@ -376,6 +376,7 @@ impl App {
                             std::process::id()
                         ),
                         name: self.server_add_name.clone(),
+                        ttyd_url: Some(state::derive_ttyd_url(&self.server_add_url)),
                         api_url: Some(self.server_add_url.clone()),
                         auth_token: if token.is_empty() { None } else { Some(token) },
                     };

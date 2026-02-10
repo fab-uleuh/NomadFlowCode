@@ -44,14 +44,9 @@ const ZOOM_MIN = 8;
 const ZOOM_MAX = 56;
 const ZOOM_STEP = 2;
 
-/**
- * Build the terminal page URL.
- * The API server proxies ttyd's HTML page at /terminal (handles auth server-side).
- */
-const buildTerminalUrl = (server: { apiUrl?: string }): string => {
-  const base = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
-  return `${base}/terminal`;
-};
+/** Terminal page URL — connects directly to ttyd. */
+const buildTerminalUrl = (server: { ttydUrl?: string }): string =>
+  (server.ttydUrl || 'http://localhost:7681').replace(/\/+$/, '');
 
 const KEYBOARD_SHORTCUTS = [
   { label: 'Ctrl+C', char: '\x03', icon: XCircleIcon },
@@ -78,19 +73,16 @@ const TMUX_SHORTCUTS = [
 /**
  * Build the JavaScript to inject before the ttyd page loads.
  * Intercepts WebSocket to:
- * 1. Rewrite URL to point to the API server's WS proxy (with auth token)
+ * 1. Rewrite URL to the API server's WS proxy (WKWebView can't send Basic Auth on WS upgrades)
  * 2. Track connection state via postMessage to React Native
  * 3. Expose sendInput() for keyboard shortcuts
  */
 const buildInjectedJS = (apiUrl: string, authToken?: string): string => {
-  // Safely escape for JS string embedding
   const escapedToken = authToken ? authToken.replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
   const escapedApiUrl = apiUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   return `
 (function() {
-  // Hide the native iOS text input caret (blue blinking line)
-  // that appears alongside xterm.js's own cursor
   var style = document.createElement('style');
   style.textContent = '.xterm-helper-textarea { caret-color: transparent !important; opacity: 0 !important; }';
   (document.head || document.documentElement).appendChild(style);
@@ -100,7 +92,8 @@ const buildInjectedJS = (apiUrl: string, authToken?: string): string => {
   var _apiUrl = '${escapedApiUrl}';
 
   window.WebSocket = function(url, protocols) {
-    // Rewrite WebSocket URL to go through the API proxy instead of direct to ttyd
+    // Rewrite WebSocket URL to go through the API server's WS proxy
+    // because WKWebView does not send Basic Auth on WebSocket upgrades
     var wsScheme = _apiUrl.indexOf('https') === 0 ? 'wss' : 'ws';
     var apiHost = _apiUrl.replace(/^https?:\\/\\//, '');
     url = wsScheme + '://' + apiHost + '/terminal/ws';
@@ -112,25 +105,13 @@ const buildInjectedJS = (apiUrl: string, authToken?: string): string => {
     window._ttydSocket = ws;
 
     ws.addEventListener('open', function() {
-      try {
-        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'connected' })
-        );
-      } catch(e) {}
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'connected' })); } catch(e) {}
     });
     ws.addEventListener('close', function() {
-      try {
-        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'disconnected' })
-        );
-      } catch(e) {}
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'disconnected' })); } catch(e) {}
     });
     ws.addEventListener('error', function() {
-      try {
-        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'error', error: 'WebSocket connection failed' })
-        );
-      } catch(e) {}
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', error: 'WebSocket connection failed' })); } catch(e) {}
     });
 
     return ws;
@@ -145,10 +126,8 @@ const buildInjectedJS = (apiUrl: string, authToken?: string): string => {
     var ws = window._ttydSocket;
     if (ws && ws.readyState === 1) {
       var bytes = new Uint8Array(data.length + 1);
-      bytes[0] = 48; // '0' = input command in ttyd protocol
-      for (var i = 0; i < data.length; i++) {
-        bytes[i + 1] = data.charCodeAt(i);
-      }
+      bytes[0] = 48;
+      for (var i = 0; i < data.length; i++) bytes[i + 1] = data.charCodeAt(i);
       ws.send(bytes.buffer);
       return true;
     }
@@ -334,6 +313,9 @@ export default function TerminalScreen() {
   const terminalUrl = buildTerminalUrl(server);
   const apiUrl = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
   const injectedJS = buildInjectedJS(apiUrl, server.authToken);
+  const basicAuthCredential = server.authToken
+    ? { username: 'nomadflow', password: server.authToken }
+    : undefined;
 
   console.log('[Terminal] terminal URL:', terminalUrl, 'API WS proxy:', apiUrl);
   const statusColor = connectionState.status === 'connected' ? 'text-success' : connectionState.status === 'error' || connectionState.status === 'disconnected' ? 'text-destructive' : 'text-warning';
@@ -407,9 +389,11 @@ export default function TerminalScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: terminalUrl }}
+          basicAuthCredential={basicAuthCredential}
           onMessage={handleWebViewMessage}
           onLoadEnd={() => {
-            // Page loaded via API proxy (auth handled server-side).
+            // Page loaded directly from ttyd (auth via basicAuthCredential).
+            // WebSocket goes through API server proxy (injected JS rewrites URL).
             // The actual 'connected' state will be set by the WebSocket 'open'
             // event from the injected JS. Fallback timeout clears 'connecting'.
             if (connectionState.status === 'connecting') {

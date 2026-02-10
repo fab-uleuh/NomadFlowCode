@@ -1,0 +1,69 @@
+---
+title: CLI Reference
+description: Command-line options for the nomadflow binary.
+---
+
+The `nomadflow` binary provides several modes of operation.
+
+## Usage
+
+```bash
+nomadflow [OPTIONS] [COMMAND]
+```
+
+## Commands
+
+### Default (no command)
+
+```bash
+nomadflow
+```
+
+Starts the HTTP server in the background, then launches the **TUI wizard**. When the TUI exits, the server is stopped. If the TUI returns a tmux session to attach to, `tmux attach-session` is executed automatically.
+
+### `serve`
+
+```bash
+nomadflow serve
+```
+
+Runs the HTTP server in the foreground with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services.
+
+## Options
+
+### `--status`
+
+```bash
+nomadflow --status
+```
+
+Displays the current tmux session status and exits. Shows whether the managed tmux session exists and its windows.
+
+### `--attach <feature>`
+
+```bash
+nomadflow --attach my-feature
+```
+
+Starts the server briefly, then attaches directly to the tmux session. Useful for quickly jumping into a running session from the command line.
+
+## TUI wizard
+
+When running in default mode, the TUI provides an interactive terminal interface with the following screens:
+
+- **Server list** — manage remote server connections
+- **Add server** — multi-step form: name, URL, token, confirmation
+- **Repository browser** — list and select repos
+- **Feature browser** — list, create, and switch feature branches
+
+The TUI is built with [ratatui](https://ratatui.rs) and exits cleanly, handing off to `tmux attach` if a session was selected.
+
+## Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `RUST_LOG` | Controls log verbosity (e.g. `nomadflow_server=debug,tower_http=info`). Only effective in `serve` mode — TUI mode suppresses logs to avoid corrupting the terminal display. |
+
+## Configuration
+
+The CLI reads `~/.nomadflowcode/config.toml` on startup. See [Configuration](/docs/server/configuration) for the full reference.

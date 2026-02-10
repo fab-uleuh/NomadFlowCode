@@ -1,0 +1,68 @@
+---
+title: Configuration
+description: Full reference for the NomadFlowCode config.toml file.
+---
+
+NomadFlowCode reads its configuration from `~/.nomadflowcode/config.toml`. All fields are optional — sensible defaults are used when omitted.
+
+## Full example
+
+```toml
+[paths]
+base_dir = "~/.nomadflowcode"
+
+[tmux]
+session = "nomadflow"
+
+[ttyd]
+port = 7681
+
+[api]
+port = 8080
+host = "0.0.0.0"
+
+[auth]
+secret = "my-secret-token"
+```
+
+## Reference
+
+### `[paths]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `base_dir` | string | `~/.nomadflowcode` | Base directory for repos, worktrees, and config. `~` is expanded to the user's home. |
+
+The following subdirectories are created automatically:
+- `{base_dir}/repos/` — bare git clones
+- `{base_dir}/worktrees/` — checked-out worktrees per feature
+
+### `[tmux]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `session` | string | `nomadflow` | Name of the tmux session to create and manage. |
+
+### `[ttyd]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `port` | integer | `7681` | Port for the ttyd web terminal process. |
+
+### `[api]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `port` | integer | `8080` | Port for the HTTP API server. |
+| `host` | string | `0.0.0.0` | Bind address for the API server. |
+
+### `[auth]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `secret` | string | `""` (empty) | Shared secret for API authentication. When empty, auth is disabled. |
+
+When set, this secret is used as:
+- **Bearer token** for API requests (`Authorization: Bearer <secret>`)
+- **Basic Auth password** for ttyd (username: `nomadflow`)
+- **Query parameter** for WebSocket proxy (`/terminal/ws?token=<secret>`)

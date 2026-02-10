@@ -16,6 +16,7 @@ export default function AddServerScreen() {
 
   const [name, setName] = useState('');
   const [apiUrl, setApiUrl] = useState('');
+  const [ttydUrl, setTtydUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -26,9 +27,23 @@ export default function AddServerScreen() {
     if (existingServer) {
       setName(existingServer.name);
       setApiUrl(existingServer.apiUrl || '');
+      setTtydUrl(existingServer.ttydUrl || '');
       setAuthToken(existingServer.authToken || '');
     }
   }, [existingServer]);
+
+  /** Auto-derive ttydUrl when apiUrl changes (same host, port 7681). */
+  const handleApiUrlChange = (value: string) => {
+    setApiUrl(value);
+    try {
+      const url = new URL(value);
+      url.port = '7681';
+      url.pathname = '/';
+      setTtydUrl(url.toString().replace(/\/$/, ''));
+    } catch {
+      // Keep current ttydUrl if apiUrl is not yet valid
+    }
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -52,6 +67,7 @@ export default function AddServerScreen() {
       const serverData = {
         name: name.trim(),
         apiUrl: apiUrl.trim(),
+        ttydUrl: ttydUrl.trim() || undefined,
         authToken: authToken.trim() || undefined,
       };
 
@@ -107,14 +123,30 @@ export default function AddServerScreen() {
                 <Input
                   placeholder="http://192.168.1.100:8080"
                   value={apiUrl}
-                  onChangeText={setApiUrl}
+                  onChangeText={handleApiUrlChange}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
                   aria-labelledby="apiUrl"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  L'URL de l'API NomadFlow (port 8080 par défaut). Le terminal est accessible via cette même URL.
+                  L'URL de l'API NomadFlow (port 8080 par défaut).
+                </Text>
+              </View>
+
+              <View className="gap-2">
+                <Label nativeID="ttydUrl">URL Terminal (ttyd)</Label>
+                <Input
+                  placeholder="http://192.168.1.100:7681"
+                  value={ttydUrl}
+                  onChangeText={setTtydUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  aria-labelledby="ttydUrl"
+                />
+                <Text className="text-xs text-muted-foreground">
+                  Se remplit automatiquement depuis l'URL API (port 7681 par défaut).
                 </Text>
               </View>
 
