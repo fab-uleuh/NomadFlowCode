@@ -83,10 +83,12 @@ pub fn spawn_signal_handler(shutdown: CancellationToken) {
 /// Run the HTTP server (with tmux session setup and ttyd startup).
 /// The server shuts down gracefully when `shutdown` is cancelled.
 /// When `public` is true, a bore tunnel is started and the server is exposed via the relay.
+/// When `quiet` is true, connection info (QR code) is not printed (used when running alongside TUI).
 pub async fn serve(
     mut settings: Settings,
     shutdown: CancellationToken,
     public: bool,
+    quiet: bool,
 ) -> color_eyre::Result<()> {
     // 0. Auto-generate a secret if --public and none configured
     if public && settings.auth.secret.is_empty() {
@@ -149,8 +151,10 @@ pub async fn serve(
         format!("http://{local_ip}:{}", settings.api.port)
     };
 
-    // 5. Display connection info with QR code
-    display::print_connection_info(&connect_url, &settings.auth.secret, public);
+    // 5. Display connection info with QR code (only in foreground serve mode)
+    if !quiet {
+        display::print_connection_info(&connect_url, &settings.auth.secret, public);
+    }
 
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown.cancelled_owned())

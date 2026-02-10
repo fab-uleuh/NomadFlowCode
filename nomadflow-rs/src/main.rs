@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
             nomadflow_server::init_tracing();
             let shutdown = CancellationToken::new();
             nomadflow_server::spawn_signal_handler(shutdown.clone());
-            nomadflow_server::serve(settings, shutdown, public).await?;
+            nomadflow_server::serve(settings, shutdown, public, false).await?;
         }
         Some(Commands::Start) => {
             start_daemon(&settings)?;
@@ -190,7 +190,7 @@ async fn main() -> Result<()> {
             let shutdown = CancellationToken::new();
             let shutdown_clone = shutdown.clone();
             let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone, false)
+                nomadflow_server::serve(server_settings, shutdown_clone, false, true)
                     .await
                     .ok();
             });
@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
             let shutdown = CancellationToken::new();
             let shutdown_clone = shutdown.clone();
             let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone, false)
+                nomadflow_server::serve(server_settings, shutdown_clone, false, true)
                     .await
                     .ok();
             });

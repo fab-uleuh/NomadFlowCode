@@ -1680,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "color-eyre",
@@ -1693,7 +1693,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dirs",
  "serde",
@@ -1706,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow-relay"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "color-eyre",
@@ -1727,7 +1727,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow-server"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "base64",
@@ -1758,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow-tui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "color-eyre",
  "crossterm 0.28.1",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "nomadflow-ws"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "futures-util",
