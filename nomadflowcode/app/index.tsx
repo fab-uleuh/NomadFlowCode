@@ -96,7 +96,7 @@ export default function ServersScreen() {
                   </View>
                 )}
               </View>
-              <CardDescription className="text-xs">{item.ttydUrl}</CardDescription>
+              <CardDescription className="text-xs">{item.apiUrl}</CardDescription>
               <CardDescription className="text-xs">
                 {formatLastConnected(item.lastConnected)}
               </CardDescription>

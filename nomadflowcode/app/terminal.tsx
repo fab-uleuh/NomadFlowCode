@@ -45,12 +45,12 @@ const ZOOM_MAX = 56;
 const ZOOM_STEP = 2;
 
 /**
- * Build the direct ttyd URL for the WebView.
- * The page loads directly from ttyd (basicAuthCredential handles HTTP auth).
- * Only the WebSocket is proxied through the API server (injected JS rewrites it).
+ * Build the terminal page URL.
+ * The API server proxies ttyd's HTML page at /terminal (handles auth server-side).
  */
-const buildTtydUrl = (server: { ttydUrl?: string }): string => {
-  return (server.ttydUrl || 'http://localhost:7681').replace(/\/+$/, '');
+const buildTerminalUrl = (server: { apiUrl?: string }): string => {
+  const base = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
+  return `${base}/terminal`;
 };
 
 const KEYBOARD_SHORTCUTS = [
@@ -331,16 +331,11 @@ export default function TerminalScreen() {
 
   const isDark = colorScheme === 'dark';
   const bgColor = isDark ? 'hsl(240, 15%, 6%)' : 'hsl(240, 20%, 98%)';
-  const terminalUrl = buildTtydUrl(server);
+  const terminalUrl = buildTerminalUrl(server);
   const apiUrl = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
   const injectedJS = buildInjectedJS(apiUrl, server.authToken);
 
-  // Basic Auth credential for direct ttyd page load (WKWebView handles this for HTTP)
-  const basicAuthCredential = server.authToken
-    ? { username: 'nomadflow', password: server.authToken }
-    : undefined;
-
-  console.log('[Terminal] ttyd URL:', terminalUrl, 'API WS proxy:', apiUrl);
+  console.log('[Terminal] terminal URL:', terminalUrl, 'API WS proxy:', apiUrl);
   const statusColor = connectionState.status === 'connected' ? 'text-success' : connectionState.status === 'error' || connectionState.status === 'disconnected' ? 'text-destructive' : 'text-warning';
 
   if (isPreparingTerminal) {
@@ -412,10 +407,9 @@ export default function TerminalScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: terminalUrl }}
-          basicAuthCredential={basicAuthCredential}
           onMessage={handleWebViewMessage}
           onLoadEnd={() => {
-            // Page loaded directly from ttyd (basicAuthCredential handles auth).
+            // Page loaded via API proxy (auth handled server-side).
             // The actual 'connected' state will be set by the WebSocket 'open'
             // event from the injected JS. Fallback timeout clears 'connecting'.
             if (connectionState.status === 'connecting') {

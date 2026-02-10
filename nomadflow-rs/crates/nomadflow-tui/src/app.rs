@@ -26,6 +26,7 @@ pub enum AppResult {
 pub enum Screen {
     Resume,
     ServerPicker,
+    ServerAdd,
     RepoPicker,
     FeaturePicker,
     FeatureCreate,
@@ -57,6 +58,11 @@ pub struct App {
     pub input_text: String,
     pub input_cursor: usize,
     pub confirm_step: bool,
+
+    // Server add state
+    pub server_add_step: u8,
+    pub server_add_name: String,
+    pub server_add_url: String,
 
     // Result
     pub should_quit: bool,
@@ -110,6 +116,9 @@ impl App {
             input_text: String::new(),
             input_cursor: 0,
             confirm_step: false,
+            server_add_step: 0,
+            server_add_name: String::new(),
+            server_add_url: String::new(),
             should_quit: false,
             attach_session: None,
         }
@@ -188,6 +197,7 @@ impl App {
         match self.screen {
             Screen::Resume => screens::resume::render(frame, chunks[2], self),
             Screen::ServerPicker => screens::server_picker::render(frame, chunks[2], self),
+            Screen::ServerAdd => screens::server_add::render(frame, chunks[2], self),
             Screen::RepoPicker => screens::repo_picker::render(frame, chunks[2], self),
             Screen::FeaturePicker => screens::feature_picker::render(frame, chunks[2], self),
             Screen::FeatureCreate => screens::feature_create::render(frame, chunks[2], self),
@@ -212,7 +222,10 @@ impl App {
         tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
     ) {
         // Global keys
-        if code == KeyCode::Char('q') && self.screen != Screen::FeatureCreate {
+        if code == KeyCode::Char('q')
+            && self.screen != Screen::FeatureCreate
+            && self.screen != Screen::ServerAdd
+        {
             self.should_quit = true;
             return;
         }
@@ -230,6 +243,7 @@ impl App {
         match self.screen {
             Screen::Resume => self.handle_resume_key(code, tx),
             Screen::ServerPicker => self.handle_server_picker_key(code, tx),
+            Screen::ServerAdd => self.handle_server_add_key(code),
             Screen::RepoPicker => self.handle_repo_picker_key(code, tx),
             Screen::FeaturePicker => self.handle_feature_picker_key(code, tx),
             Screen::FeatureCreate => self.handle_feature_create_key(code, tx),
@@ -250,6 +264,15 @@ impl App {
                 self.screen = Screen::RepoPicker;
                 self.repo = None;
                 self.features.clear();
+                self.selected_index = 0;
+            }
+            Screen::ServerAdd => {
+                self.screen = Screen::ServerPicker;
+                self.input_text.clear();
+                self.input_cursor = 0;
+                self.server_add_step = 0;
+                self.server_add_name.clear();
+                self.server_add_url.clear();
                 self.selected_index = 0;
             }
             Screen::FeatureCreate => {
@@ -302,7 +325,8 @@ impl App {
         code: KeyCode,
         tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
     ) {
-        let count = self.servers.len();
+        // Servers + 1 for "Add server" option
+        let count = self.servers.len() + 1;
         match code {
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_index > 0 {
@@ -315,13 +339,122 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                if self.selected_index < count {
+                if self.selected_index == self.servers.len() {
+                    // "+ Add server"
+                    self.screen = Screen::ServerAdd;
+                    self.selected_index = 0;
+                    self.input_text.clear();
+                    self.input_cursor = 0;
+                    self.server_add_step = 0;
+                    self.server_add_name.clear();
+                    self.server_add_url.clear();
+                } else if self.selected_index < self.servers.len() {
                     self.server = Some(self.servers[self.selected_index].clone());
                     self.screen = Screen::RepoPicker;
                     self.selected_index = 0;
                     self.loading = true;
                     self.trigger_load_repos(tx);
                 }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_server_add_key(&mut self, code: KeyCode) {
+        if self.server_add_step == 3 {
+            // Confirmation step: y/n
+            match code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    let token = self.input_text.trim().to_string();
+                    let new_server = ServerConfig {
+                        id: format!(
+                            "{}-{}",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis(),
+                            std::process::id()
+                        ),
+                        name: self.server_add_name.clone(),
+                        api_url: Some(self.server_add_url.clone()),
+                        auth_token: if token.is_empty() { None } else { Some(token) },
+                    };
+                    self.servers.push(new_server);
+                    state::save_servers(&self.settings, &self.servers);
+
+                    // Reset and go back to picker
+                    self.screen = Screen::ServerPicker;
+                    self.input_text.clear();
+                    self.input_cursor = 0;
+                    self.server_add_step = 0;
+                    self.server_add_name.clear();
+                    self.server_add_url.clear();
+                    self.selected_index = 0;
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') => {
+                    self.server_add_step = 0;
+                    self.input_text.clear();
+                    self.input_cursor = 0;
+                    self.server_add_name.clear();
+                    self.server_add_url.clear();
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Text input for steps 0-2
+        match code {
+            KeyCode::Char(c) => {
+                self.input_text.insert(self.input_cursor, c);
+                self.input_cursor += 1;
+            }
+            KeyCode::Backspace => {
+                if self.input_cursor > 0 {
+                    self.input_cursor -= 1;
+                    self.input_text.remove(self.input_cursor);
+                }
+            }
+            KeyCode::Left => {
+                if self.input_cursor > 0 {
+                    self.input_cursor -= 1;
+                }
+            }
+            KeyCode::Right => {
+                if self.input_cursor < self.input_text.len() {
+                    self.input_cursor += 1;
+                }
+            }
+            KeyCode::Enter => {
+                let trimmed = self.input_text.trim().to_string();
+                match self.server_add_step {
+                    0 => {
+                        if trimmed.is_empty() {
+                            return;
+                        }
+                        self.server_add_name = trimmed;
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                        self.server_add_step = 1;
+                    }
+                    1 => {
+                        if trimmed.is_empty() {
+                            return;
+                        }
+                        self.server_add_url = trimmed;
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                        self.server_add_step = 2;
+                    }
+                    2 => {
+                        // Token is optional, so empty is fine; move to confirm
+                        self.server_add_step = 3;
+                    }
+                    _ => {}
+                }
+            }
+            KeyCode::Esc => {
+                self.go_back();
             }
             _ => {}
         }
@@ -681,5 +814,13 @@ mod tests {
         app.screen = Screen::FeatureCreate;
         app.go_back();
         assert_eq!(app.screen, Screen::FeaturePicker);
+    }
+
+    #[test]
+    fn test_go_back_from_server_add() {
+        let mut app = App::new(test_settings());
+        app.screen = Screen::ServerAdd;
+        app.go_back();
+        assert_eq!(app.screen, Screen::ServerPicker);
     }
 }

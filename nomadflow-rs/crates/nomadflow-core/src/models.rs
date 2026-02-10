@@ -124,7 +124,6 @@ pub struct CloneRepoRequest {
 pub struct Server {
     pub id: String,
     pub name: String,
-    pub ttyd_url: Option<String>,
     pub api_url: Option<String>,
     pub auth_token: Option<String>,
     pub last_connected: Option<u64>,

@@ -5,51 +5,54 @@ import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings } from '../types';
 
 /**
- * Migrate old server format (url) to new format (ttydUrl + apiUrl)
- * Also removes deprecated fields (url, isDefault)
+ * Migrate old server formats to current format (apiUrl only).
+ * Handles: old 'url' (WebSocket) field, old 'ttydUrl' field.
  */
 function migrateServer(server: any): Server {
-  // Start with a clean server object
   const migrated: Server = {
     id: server.id,
     name: server.name,
-    ttydUrl: server.ttydUrl,
     apiUrl: server.apiUrl,
     authToken: server.authToken,
     lastConnected: server.lastConnected,
   };
 
-  // If already has ttydUrl, clean and return
-  if (migrated.ttydUrl) {
+  // Already has apiUrl — done
+  if (migrated.apiUrl) {
     return migrated;
   }
 
-  // Migrate from old 'url' field (WebSocket URL)
-  const oldUrl = server.url || '';
-
-  // Convert ws://host:7681/ws -> http://host:7681
-  const ttydUrl = oldUrl
-    .replace('wss://', 'https://')
-    .replace('ws://', 'http://')
-    .replace('/ws', '');
-
-  migrated.ttydUrl = ttydUrl || 'http://localhost:7681';
-
-  // Derive API URL: http://host:7681 -> http://host:8080
-  if (!migrated.apiUrl && migrated.ttydUrl) {
+  // Derive apiUrl from old ttydUrl field
+  const ttydUrl = server.ttydUrl || '';
+  if (ttydUrl) {
     try {
-      const url = new URL(migrated.ttydUrl);
+      const url = new URL(ttydUrl);
       url.port = url.port === '7681' ? '8080' : url.port;
       migrated.apiUrl = url.toString().replace(/\/$/, '');
     } catch {
-      migrated.apiUrl = migrated.ttydUrl.replace(':7681', ':8080');
+      migrated.apiUrl = ttydUrl.replace(':7681', ':8080');
     }
+    return migrated;
   }
 
-  if (!migrated.apiUrl) {
-    migrated.apiUrl = 'http://localhost:8080';
+  // Derive from old 'url' (WebSocket) field
+  const oldUrl = server.url || '';
+  if (oldUrl) {
+    const httpUrl = oldUrl
+      .replace('wss://', 'https://')
+      .replace('ws://', 'http://')
+      .replace('/ws', '');
+    try {
+      const url = new URL(httpUrl);
+      url.port = url.port === '7681' ? '8080' : url.port;
+      migrated.apiUrl = url.toString().replace(/\/$/, '');
+    } catch {
+      migrated.apiUrl = httpUrl.replace(':7681', ':8080');
+    }
+    return migrated;
   }
 
+  migrated.apiUrl = 'http://localhost:8080';
   return migrated;
 }
 

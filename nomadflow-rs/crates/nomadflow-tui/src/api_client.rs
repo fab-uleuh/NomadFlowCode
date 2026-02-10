@@ -6,33 +6,16 @@ use crate::state::ServerConfig;
 
 /// Derive the API base URL from a server config.
 pub fn get_api_base_url(server: &ServerConfig) -> String {
-    if let Some(ref url) = server.api_url {
-        let base = url.trim_end_matches('/');
-        if base.ends_with("/api") {
-            return base.to_string();
-        }
-        return format!("{base}/api");
-    }
-
-    let ttyd_url = server
-        .ttyd_url
+    let url = server
+        .api_url
         .as_deref()
-        .unwrap_or("http://localhost:7681");
-
-    // Try to parse and derive port
-    if let Ok(url) = url::Url::parse(ttyd_url) {
-        let port = if url.port() == Some(7681) {
-            8080
-        } else {
-            url.port().unwrap_or(8080)
-        };
-        let host = url.host_str().unwrap_or("localhost");
-        let scheme = url.scheme();
-        return format!("{scheme}://{host}:{port}/api");
+        .unwrap_or("http://localhost:8080");
+    let base = url.trim_end_matches('/');
+    if base.ends_with("/api") {
+        base.to_string()
+    } else {
+        format!("{base}/api")
     }
-
-    // Fallback
-    "http://localhost:8080/api".to_string()
 }
 
 /// Check if a server is healthy.
@@ -175,22 +158,20 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: Some("http://myserver:9000".to_string()),
-            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
     }
 
     #[test]
-    fn test_api_base_url_with_ttyd_port_7681() {
+    fn test_api_base_url_with_trailing_slash() {
         let server = ServerConfig {
             id: "test".to_string(),
             name: "test".to_string(),
-            api_url: None,
-            ttyd_url: Some("http://myhost:7681".to_string()),
+            api_url: Some("http://myserver:9000/".to_string()),
             auth_token: None,
         };
-        assert_eq!(get_api_base_url(&server), "http://myhost:8080/api");
+        assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
     }
 
     #[test]
@@ -199,7 +180,6 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: None,
-            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://localhost:8080/api");

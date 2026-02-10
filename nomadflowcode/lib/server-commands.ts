@@ -5,20 +5,7 @@ import type { ServerCommand, SwitchFeatureParams } from './types';
  * Get the API base URL from server config
  */
 function getApiBaseUrl(server: Server): string {
-  let baseUrl = server.apiUrl;
-
-  if (!baseUrl) {
-    // Derive from ttydUrl
-    const ttydUrl = server.ttydUrl || 'http://localhost:7681';
-
-    try {
-      const url = new URL(ttydUrl);
-      url.port = url.port === '7681' ? '8080' : url.port;
-      baseUrl = url.toString().replace(/\/$/, '');
-    } catch {
-      baseUrl = ttydUrl.replace(':7681', ':8080');
-    }
-  }
+  let baseUrl = server.apiUrl || 'http://localhost:8080';
 
   // Ensure /api prefix is present
   if (!baseUrl.endsWith('/api')) {

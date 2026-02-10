@@ -15,7 +15,6 @@ export default function AddServerScreen() {
   const { addServer, updateServer, getServer } = useStorage();
 
   const [name, setName] = useState('');
-  const [ttydUrl, setTtydUrl] = useState('');
   const [apiUrl, setApiUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,52 +22,17 @@ export default function AddServerScreen() {
   const isEditing = !!params.serverId;
   const existingServer = params.serverId ? getServer(params.serverId) : undefined;
 
-  // Auto-generate API URL from ttyd URL
-  const deriveApiUrl = (ttydUrlValue: string): string => {
-    try {
-      const parsedUrl = new URL(ttydUrlValue);
-      const protocol = parsedUrl.protocol;
-      // Default API port is 8080, ttyd default is 7681
-      const port = parsedUrl.port === '7681' ? '8080' : parsedUrl.port;
-      return `${protocol}//${parsedUrl.hostname}:${port}`;
-    } catch {
-      return '';
-    }
-  };
-
   useEffect(() => {
     if (existingServer) {
       setName(existingServer.name);
-      setTtydUrl(existingServer.ttydUrl || '');
-      setApiUrl(existingServer.apiUrl || deriveApiUrl(existingServer.ttydUrl || ''));
+      setApiUrl(existingServer.apiUrl || '');
       setAuthToken(existingServer.authToken || '');
     }
   }, [existingServer]);
 
-  // Update API URL when ttyd URL changes (auto-generate if empty or matches derived pattern)
-  const handleTtydUrlChange = (text: string) => {
-    setTtydUrl(text);
-    const derived = deriveApiUrl(text);
-    // Auto-update API URL if it's empty or was previously auto-generated
-    if (derived && (!apiUrl || apiUrl === deriveApiUrl(ttydUrl))) {
-      setApiUrl(derived);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!name.trim()) {
       Alert.alert('Erreur', 'Veuillez entrer un nom pour le serveur');
-      return;
-    }
-
-    if (!ttydUrl.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer une URL ttyd');
-      return;
-    }
-
-    // Basic URL validation
-    if (!ttydUrl.startsWith('http://') && !ttydUrl.startsWith('https://')) {
-      Alert.alert('Erreur', "L'URL ttyd doit commencer par http:// ou https://");
       return;
     }
 
@@ -87,7 +51,6 @@ export default function AddServerScreen() {
     try {
       const serverData = {
         name: name.trim(),
-        ttydUrl: ttydUrl.trim(),
         apiUrl: apiUrl.trim(),
         authToken: authToken.trim() || undefined,
       };
@@ -140,22 +103,6 @@ export default function AddServerScreen() {
               </View>
 
               <View className="gap-2">
-                <Label nativeID="ttydUrl">URL ttyd</Label>
-                <Input
-                  placeholder="http://192.168.1.100:7681"
-                  value={ttydUrl}
-                  onChangeText={handleTtydUrlChange}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  aria-labelledby="ttydUrl"
-                />
-                <Text className="text-xs text-muted-foreground">
-                  L'URL HTTP du terminal ttyd (port 7681 par défaut)
-                </Text>
-              </View>
-
-              <View className="gap-2">
                 <Label nativeID="apiUrl">URL API</Label>
                 <Input
                   placeholder="http://192.168.1.100:8080"
@@ -167,7 +114,7 @@ export default function AddServerScreen() {
                   aria-labelledby="apiUrl"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  L'URL de l'API NomadFlow (port 8080 par défaut, auto-générée)
+                  L'URL de l'API NomadFlow (port 8080 par défaut). Le terminal est accessible via cette même URL.
                 </Text>
               </View>
 

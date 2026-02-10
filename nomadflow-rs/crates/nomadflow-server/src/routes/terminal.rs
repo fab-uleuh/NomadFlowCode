@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use axum::{
+    body::Body,
     extract::{
         ws::{Message, WebSocket},
-        Query, State, WebSocketUpgrade,
+        Path, Query, State, WebSocketUpgrade,
     },
-    response::Response,
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
     routing::get,
     Router,
 };
@@ -22,6 +24,68 @@ use crate::state::AppState;
 struct WsQuery {
     token: Option<String>,
 }
+
+// ---- HTTP reverse proxy for ttyd HTML page ----
+
+/// Proxy GET /terminal to ttyd's root page.
+async fn terminal_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    proxy_ttyd_http(&state, "/").await
+}
+
+/// Proxy GET /terminal/*path to ttyd's sub-resources (JS, CSS, etc.).
+async fn terminal_asset(
+    State(state): State<Arc<AppState>>,
+    Path(path): Path<String>,
+) -> impl IntoResponse {
+    proxy_ttyd_http(&state, &format!("/{path}")).await
+}
+
+/// Forward an HTTP GET to ttyd, adding Basic auth if configured.
+async fn proxy_ttyd_http(state: &AppState, path: &str) -> Response {
+    let ttyd_port = state.settings.ttyd.port;
+    let url = format!("http://127.0.0.1:{ttyd_port}{path}");
+
+    let client = reqwest::Client::new();
+    let mut req = client.get(&url);
+
+    // Add basic auth if secret is set (same as WS proxy)
+    if !state.settings.auth.secret.is_empty() {
+        let creds = base64::engine::general_purpose::STANDARD
+            .encode(format!("nomadflow:{}", state.settings.auth.secret));
+        req = req.header("Authorization", format!("Basic {creds}"));
+    }
+
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Failed to proxy to ttyd at {url}: {e}");
+            return (StatusCode::BAD_GATEWAY, "Failed to connect to ttyd").into_response();
+        }
+    };
+
+    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            error!("Failed to read ttyd response: {e}");
+            return (StatusCode::BAD_GATEWAY, "Failed to read ttyd response").into_response();
+        }
+    };
+
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, content_type)
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response())
+}
+
+// ---- WebSocket proxy ----
 
 async fn ws_proxy(
     State(state): State<Arc<AppState>>,
@@ -156,5 +220,10 @@ async fn handle_ws(client_ws: WebSocket, ttyd_port: u16, auth_secret: String) {
 }
 
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route("/terminal/ws", get(ws_proxy))
+    Router::new()
+        // WS route is more specific, matches first
+        .route("/terminal/ws", get(ws_proxy))
+        // HTML proxy routes
+        .route("/terminal", get(terminal_page))
+        .route("/terminal/{*path}", get(terminal_asset))
 }

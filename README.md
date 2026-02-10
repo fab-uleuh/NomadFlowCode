@@ -56,39 +56,47 @@ NomadFlow est une application mobile open source (React Native) qui permet d'acc
 
 ## 🚀 Quick Start
 
-### Côté Serveur
+### Installation de la CLI
 
-1. **Installation automatique** :
+**macOS / Linux :**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fab-uleuh/NomadFlowCode/main/server-scripts/install.sh | bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fab-uleuh/NomadFlowCode/releases/latest/download/nomadflow-installer.sh | sh
 ```
 
-2. **Configuration** :
-```bash
-nano ~/.nomadflow/config/nomadflow.conf
+**Windows (PowerShell) :**
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/fab-uleuh/NomadFlowCode/releases/latest/download/nomadflow-installer.ps1 | iex"
 ```
 
-3. **Démarrage** :
+**Depuis les sources (nécessite Rust) :**
 ```bash
-~/.nomadflow/scripts/start-server.sh
-
-# Ou avec systemd
-sudo systemctl enable nomadflow
-sudo systemctl start nomadflow
+git clone https://github.com/fab-uleuh/NomadFlowCode.git
+cd NomadFlowCode/nomadflow-rs
+cargo install --path .
 ```
 
-### Désinstallation
-
-Pour désinstaller NomadFlow du serveur :
+### Utilisation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fab-uleuh/NomadFlowCode/main/server-scripts/uninstall.sh | bash
+# Lancer le TUI wizard (serveur + interface interactive)
+nomadflow
+
+# Lancer le serveur HTTP seul (mode headless/Docker)
+nomadflow serve
+
+# Afficher le statut tmux
+nomadflow --status
+
+# S'attacher directement à une session
+nomadflow --attach <feature>
 ```
 
-Options :
-- `--all` : Supprime également les répertoires worktrees et projects
-- `--keep-config` : Conserve la configuration pour une réinstallation future
-- `-y` : Mode non-interactif (confirme toutes les actions)
+### Configuration
+
+```bash
+# Le fichier de configuration est créé automatiquement au premier lancement
+nano ~/.nomadflowcode/config.toml
+```
 
 ### Côté Mobile
 

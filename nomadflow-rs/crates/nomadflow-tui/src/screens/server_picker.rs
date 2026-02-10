@@ -21,7 +21,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
-    let items: Vec<ListItem> = app
+    let mut items: Vec<ListItem> = app
         .servers
         .iter()
         .enumerate()
@@ -45,6 +45,15 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
             }
         })
         .collect();
+
+    // "+ Add server" option
+    let add_item = ListItem::new("+ Add server");
+    let add_idx = app.servers.len();
+    items.push(if add_idx == app.selected_index {
+        add_item.style(Style::default().fg(Color::Green).bold())
+    } else {
+        add_item.style(Style::default().fg(Color::Green))
+    });
 
     let list = List::new(items).highlight_symbol("> ");
     frame.render_widget(list, chunks[1]);

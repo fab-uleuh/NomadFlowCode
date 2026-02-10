@@ -20,7 +20,6 @@ pub struct CliState {
 pub struct ServerConfig {
     pub id: String,
     pub name: String,
-    pub ttyd_url: Option<String>,
     pub api_url: Option<String>,
     pub auth_token: Option<String>,
 }
@@ -56,7 +55,6 @@ pub fn load_servers(settings: &Settings) -> Vec<ServerConfig> {
         id: "localhost".to_string(),
         name: "localhost".to_string(),
         api_url: Some(format!("http://localhost:{}", settings.api.port)),
-        ttyd_url: Some(format!("http://localhost:{}", settings.ttyd.port)),
         auth_token: if settings.auth.secret.is_empty() {
             None
         } else {
@@ -78,6 +76,17 @@ pub fn load_servers(settings: &Settings) -> Vec<ServerConfig> {
     }
 
     vec![localhost]
+}
+
+/// Save servers to cli-servers.json (filtering out localhost which is auto-generated).
+pub fn save_servers(settings: &Settings, servers: &[ServerConfig]) {
+    let base = settings.base_dir();
+    std::fs::create_dir_all(&base).ok();
+    let servers_path = base.join("cli-servers.json");
+    let to_save: Vec<&ServerConfig> = servers.iter().filter(|s| s.id != "localhost").collect();
+    if let Ok(json) = serde_json::to_string_pretty(&to_save) {
+        std::fs::write(servers_path, json).ok();
+    }
 }
 
 #[cfg(test)]
