@@ -9,7 +9,8 @@ use axum::{
 use serde_json::{json, Value};
 
 use nomadflow_core::models::{
-    CreateFeatureRequest, CreateFeatureResponse, DeleteFeatureRequest, DeleteFeatureResponse,
+    AttachBranchRequest, AttachBranchResponse, CreateFeatureRequest, CreateFeatureResponse,
+    DeleteFeatureRequest, DeleteFeatureResponse, ListBranchesRequest, ListBranchesResponse,
     ListFeaturesRequest, ListFeaturesResponse, SwitchFeatureRequest, SwitchFeatureResponse,
 };
 use nomadflow_core::services::tmux::window_name;
@@ -41,7 +42,7 @@ async fn create_feature(
 
     let (worktree_path, branch) = state
         .git
-        .create_feature(&request.repo_path, &request.feature_name, base_branch)
+        .create_feature(&request.repo_path, &request.branch_name, base_branch)
         .await
         .map_err(|e| {
             (
@@ -49,6 +50,13 @@ async fn create_feature(
                 Json(json!({ "detail": e.to_string() })),
             )
         })?;
+
+    // Derive the worktree name for tmux window naming
+    let wt_name = std::path::Path::new(&worktree_path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
 
     // Ensure tmux session and window
     state.tmux.ensure_session().await.map_err(|e| {
@@ -58,7 +66,7 @@ async fn create_feature(
         )
     })?;
 
-    let win_name = window_name(&request.repo_path, &request.feature_name);
+    let win_name = window_name(&request.repo_path, &wt_name);
     state
         .tmux
         .ensure_window(&win_name, Some(&worktree_path))
@@ -190,10 +198,81 @@ async fn switch_feature(
     }))
 }
 
+async fn list_branches(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ListBranchesRequest>,
+) -> Result<Json<ListBranchesResponse>, (StatusCode, Json<Value>)> {
+    let (branches, default_branch) = state
+        .git
+        .list_branches(&request.repo_path)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "detail": e.to_string() })),
+            )
+        })?;
+
+    Ok(Json(ListBranchesResponse {
+        branches,
+        default_branch,
+    }))
+}
+
+async fn attach_branch(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AttachBranchRequest>,
+) -> Result<Json<AttachBranchResponse>, (StatusCode, Json<Value>)> {
+    let (worktree_path, branch) = state
+        .git
+        .attach_branch(&request.repo_path, &request.branch_name)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "detail": e.to_string() })),
+            )
+        })?;
+
+    let wt_name = std::path::Path::new(&worktree_path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
+    // Ensure tmux session and window
+    state.tmux.ensure_session().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "detail": e.to_string() })),
+        )
+    })?;
+
+    let win_name = window_name(&request.repo_path, &wt_name);
+    state
+        .tmux
+        .ensure_window(&win_name, Some(&worktree_path))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "detail": e.to_string() })),
+            )
+        })?;
+
+    Ok(Json(AttachBranchResponse {
+        worktree_path,
+        branch,
+        tmux_window: win_name,
+    }))
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/list-features", post(list_features))
         .route("/api/create-feature", post(create_feature))
         .route("/api/delete-feature", post(delete_feature))
         .route("/api/switch-feature", post(switch_feature))
+        .route("/api/list-branches", post(list_branches))
+        .route("/api/attach-branch", post(attach_branch))
 }

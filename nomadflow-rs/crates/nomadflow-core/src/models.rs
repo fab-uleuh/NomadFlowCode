@@ -74,6 +74,45 @@ pub struct HealthResponse {
     pub api_port: u16,
 }
 
+// ---- Branch models ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_remote: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListBranchesRequest {
+    pub repo_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListBranchesResponse {
+    pub branches: Vec<BranchInfo>,
+    pub default_branch: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachBranchRequest {
+    pub repo_path: String,
+    pub branch_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachBranchResponse {
+    pub worktree_path: String,
+    pub branch: String,
+    pub tmux_window: String,
+}
+
 // ---- Request models ----
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +125,9 @@ pub struct ListFeaturesRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CreateFeatureRequest {
     pub repo_path: String,
-    pub feature_name: String,
+    /// Full branch name (e.g. "feature/add-login", "bugfix/crash", "my-branch")
+    #[serde(alias = "featureName")]
+    pub branch_name: String,
     #[serde(default = "default_base_branch")]
     pub base_branch: String,
 }
@@ -171,11 +212,17 @@ mod tests {
 
     #[test]
     fn test_create_feature_request_deserialization() {
-        let json = r#"{"featureName": "x", "repoPath": "y", "baseBranch": "main"}"#;
+        // New format with branchName
+        let json = r#"{"branchName": "feature/x", "repoPath": "y", "baseBranch": "main"}"#;
         let req: CreateFeatureRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.feature_name, "x");
+        assert_eq!(req.branch_name, "feature/x");
         assert_eq!(req.repo_path, "y");
         assert_eq!(req.base_branch, "main");
+
+        // Backward compat with featureName alias
+        let json2 = r#"{"featureName": "x", "repoPath": "y", "baseBranch": "main"}"#;
+        let req2: CreateFeatureRequest = serde_json::from_str(json2).unwrap();
+        assert_eq!(req2.branch_name, "x");
     }
 
     #[test]

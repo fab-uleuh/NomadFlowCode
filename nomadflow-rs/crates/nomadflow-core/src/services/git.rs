@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Settings;
 use crate::error::{NomadError, Result};
-use crate::models::{Feature, Repository};
+use crate::models::{BranchInfo, Feature, Repository};
 use crate::shell::{run, run_command};
 
 pub struct GitService {
@@ -234,11 +234,136 @@ impl GitService {
         Ok(features)
     }
 
-    /// Create a new feature worktree.
+    /// List all branches (local and remote) for a repository, excluding those already in a worktree.
+    pub async fn list_branches(&self, repo_path: &str) -> Result<(Vec<BranchInfo>, String)> {
+        // Fetch latest (ignore errors if offline)
+        run("git fetch --all 2>/dev/null || true", Some(repo_path)).await;
+
+        // Get branches already used by worktrees
+        let wt_result = run("git worktree list --porcelain", Some(repo_path)).await;
+        let mut worktree_branches = std::collections::HashSet::new();
+        if wt_result.success() {
+            for line in wt_result.stdout.lines() {
+                if let Some(branch_ref) = line.trim().strip_prefix("branch ") {
+                    let branch = branch_ref
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(branch_ref);
+                    worktree_branches.insert(branch.to_string());
+                }
+            }
+        }
+
+        // List local branches
+        let local_result = run(
+            "git branch --format=\"%(refname:short)\"",
+            Some(repo_path),
+        )
+        .await;
+        let mut local_names = std::collections::HashSet::new();
+        let mut branches = Vec::new();
+
+        if local_result.success() {
+            for line in local_result.stdout.lines() {
+                let name = line.trim().to_string();
+                if name.is_empty() || worktree_branches.contains(&name) {
+                    continue;
+                }
+                local_names.insert(name.clone());
+                branches.push(BranchInfo {
+                    name,
+                    is_remote: false,
+                    remote_name: None,
+                });
+            }
+        }
+
+        // List remote branches
+        let remote_result = run(
+            "git branch -r --format=\"%(refname:short)\"",
+            Some(repo_path),
+        )
+        .await;
+
+        if remote_result.success() {
+            for line in remote_result.stdout.lines() {
+                let full_name = line.trim().to_string();
+                if full_name.is_empty() || full_name.contains("/HEAD") {
+                    continue;
+                }
+                // Extract branch name without remote prefix (e.g. "origin/feature/x" -> "feature/x")
+                let branch_name = if let Some(pos) = full_name.find('/') {
+                    &full_name[pos + 1..]
+                } else {
+                    &full_name
+                };
+                // Skip if already exists locally or already in a worktree
+                if local_names.contains(branch_name) || worktree_branches.contains(branch_name) {
+                    continue;
+                }
+                let remote = full_name.split('/').next().unwrap_or("origin").to_string();
+                branches.push(BranchInfo {
+                    name: branch_name.to_string(),
+                    is_remote: true,
+                    remote_name: Some(remote),
+                });
+            }
+        }
+
+        let default_branch = self.get_default_branch(repo_path).await;
+        Ok((branches, default_branch))
+    }
+
+    /// Attach an existing branch as a worktree.
+    pub async fn attach_branch(
+        &self,
+        repo_path: &str,
+        branch_name: &str,
+    ) -> Result<(String, String)> {
+        let repo_path_obj = PathBuf::from(repo_path);
+        let repo_name = repo_path_obj
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let repo_worktrees_dir = self.worktrees_dir.join(&repo_name);
+        tokio::fs::create_dir_all(&repo_worktrees_dir).await?;
+
+        let wt_name = derive_worktree_name(branch_name, &repo_worktrees_dir);
+        let worktree_path = repo_worktrees_dir.join(&wt_name);
+        let wt = worktree_path.to_string_lossy();
+
+        // Try local branch first
+        let result = run(
+            &format!("git worktree add \"{wt}\" \"{branch_name}\""),
+            Some(repo_path),
+        )
+        .await;
+
+        if !result.success() {
+            // Try tracking remote branch
+            let result = run(
+                &format!("git worktree add --track -b \"{branch_name}\" \"{wt}\" \"origin/{branch_name}\""),
+                Some(repo_path),
+            )
+            .await;
+
+            if !result.success() {
+                return Err(NomadError::CommandFailed(format!(
+                    "Failed to attach branch '{}': {}",
+                    branch_name, result.stderr
+                )));
+            }
+        }
+
+        Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()))
+    }
+
+    /// Create a new feature worktree with a full branch name.
     pub async fn create_feature(
         &self,
         repo_path: &str,
-        feature_name: &str,
+        branch_name: &str,
         base_branch: Option<&str>,
     ) -> Result<(String, String)> {
         let repo_path_obj = PathBuf::from(repo_path);
@@ -257,12 +382,12 @@ impl GitService {
         let repo_worktrees_dir = self.worktrees_dir.join(&repo_name);
         tokio::fs::create_dir_all(&repo_worktrees_dir).await?;
 
-        let worktree_path = repo_worktrees_dir.join(feature_name);
-        let branch_name = format!("feature/{feature_name}");
+        let wt_name = derive_worktree_name(branch_name, &repo_worktrees_dir);
+        let worktree_path = repo_worktrees_dir.join(&wt_name);
 
         // If worktree already exists, just return
         if worktree_path.exists() {
-            return Ok((worktree_path.to_string_lossy().to_string(), branch_name));
+            return Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()));
         }
 
         // Fetch latest from remote (ignore errors)
@@ -311,7 +436,7 @@ impl GitService {
             }
         }
 
-        Ok((worktree_path.to_string_lossy().to_string(), branch_name))
+        Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()))
     }
 
     /// Delete a feature worktree.
@@ -419,6 +544,38 @@ pub fn sanitize_name(name: &str) -> String {
     result
 }
 
+/// Derive a worktree directory name from a branch name.
+/// Takes the last segment after `/`, with collision handling.
+///
+/// Examples:
+/// - `feature/add-login` → `add-login`
+/// - `bugfix/critical-fix` → `critical-fix`
+/// - `my-branch` → `my-branch`
+pub fn derive_worktree_name(branch_name: &str, worktrees_dir: &Path) -> String {
+    let base = branch_name
+        .rsplit('/')
+        .next()
+        .unwrap_or(branch_name);
+
+    let base = sanitize_name(base);
+
+    // Check for collisions
+    let candidate = worktrees_dir.join(&base);
+    if !candidate.exists() {
+        return base;
+    }
+
+    // Add suffix -2, -3, etc.
+    for i in 2.. {
+        let suffixed = format!("{base}-{i}");
+        if !worktrees_dir.join(&suffixed).exists() {
+            return suffixed;
+        }
+    }
+
+    base // unreachable in practice
+}
+
 /// Inject a token into a git HTTPS URL.
 fn inject_token(url: &str, token: &str) -> String {
     if let Some(rest) = url.strip_prefix("https://") {
@@ -434,6 +591,25 @@ fn inject_token(url: &str, token: &str) -> String {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_derive_worktree_name() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+
+        assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login");
+        assert_eq!(derive_worktree_name("bugfix/critical-fix", dir), "critical-fix");
+        assert_eq!(derive_worktree_name("release/v2.0", dir), "v2.0");
+        assert_eq!(derive_worktree_name("my-branch", dir), "my-branch");
+
+        // Test collision: create "add-login" dir, next should be "add-login-2"
+        std::fs::create_dir(dir.join("add-login")).unwrap();
+        assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login-2");
+
+        // Another collision
+        std::fs::create_dir(dir.join("add-login-2")).unwrap();
+        assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login-3");
+    }
 
     #[test]
     fn test_sanitize_name() {
@@ -536,9 +712,9 @@ mod tests {
         let svc = GitService::new(&settings);
         let repo_path = repo_dir.to_string_lossy().to_string();
 
-        // Create a feature
+        // Create a feature with full branch name
         let (wt_path, branch) = svc
-            .create_feature(&repo_path, "test-feat", None)
+            .create_feature(&repo_path, "feature/test-feat", None)
             .await
             .unwrap();
         assert!(wt_path.contains("test-feat"));
@@ -579,7 +755,7 @@ mod tests {
         let repo_path = repo_dir.to_string_lossy().to_string();
 
         // Create then delete
-        svc.create_feature(&repo_path, "to-delete", None)
+        svc.create_feature(&repo_path, "feature/to-delete", None)
             .await
             .unwrap();
         let deleted = svc.delete_feature(&repo_path, "to-delete").await.unwrap();
