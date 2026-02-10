@@ -33,8 +33,8 @@ interface ShortcutQuickBarProps {
 }
 
 export function ShortcutQuickBar({ shortcuts, onExecute, onAdd, onEdit }: ShortcutQuickBarProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  const heightAnim = useRef(new Animated.Value(1)).current;
+  const [collapsed, setCollapsed] = useState(true);
+  const heightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(heightAnim, {

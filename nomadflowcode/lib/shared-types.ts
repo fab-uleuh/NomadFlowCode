@@ -56,3 +56,20 @@ export interface CreateFeatureResult {
   branch: string;
   tmuxWindow: string;
 }
+
+export interface BranchInfo {
+  name: string;
+  isRemote: boolean;
+  remoteName?: string;
+}
+
+export interface BranchListResponse {
+  branches: BranchInfo[];
+  defaultBranch: string;
+}
+
+export interface AttachBranchResult {
+  worktreePath: string;
+  branch: string;
+  tmuxWindow: string;
+}

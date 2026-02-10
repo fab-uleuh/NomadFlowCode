@@ -45,13 +45,13 @@ export interface TerminalMessage {
 
 // Command types for server scripts
 export interface ServerCommand {
-  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo';
+  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo' | 'list-branches' | 'attach-branch';
   params?: Record<string, string>;
 }
 
 export interface CreateFeatureParams {
   repoPath: string;
-  featureName: string;
+  branchName: string;
   baseBranch?: string;
 }
 

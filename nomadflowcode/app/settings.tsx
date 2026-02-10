@@ -24,7 +24,7 @@ type AiAgent = 'claude' | 'ollama' | 'custom';
 const AI_AGENTS: { value: AiAgent; label: string; description: string }[] = [
   { value: 'claude', label: 'Claude', description: 'Claude CLI (ask-claude)' },
   { value: 'ollama', label: 'Ollama', description: 'deepseek-coder local' },
-  { value: 'custom', label: 'Custom', description: 'Commande personnalisée' },
+  { value: 'custom', label: 'Autre', description: 'Saisir une commande agent' },
 ];
 
 export default function SettingsScreen() {
