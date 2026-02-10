@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Terminal, GitBranch, Server } from 'lucide-react';
+import { InstallCommand } from '@/components/install-command';
 
 export default function HomePage() {
   return (
@@ -42,6 +43,10 @@ export default function HomePage() {
         binary that runs on your server, paired with a mobile app for on-the-go
         development.
       </p>
+
+      <div className="mb-10 w-full max-w-lg">
+        <InstallCommand />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl w-full mb-10">
         <div className="border border-fd-border rounded-xl p-5 bg-fd-card transition-colors hover:border-[#5336E2]/40">

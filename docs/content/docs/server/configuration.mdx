@@ -23,6 +23,9 @@ host = "0.0.0.0"
 
 [auth]
 secret = "my-secret-token"
+
+[tunnel]
+subdomain = "fabien"
 ```
 
 ## Reference
@@ -66,3 +69,26 @@ When set, this secret is used as:
 - **Bearer token** for API requests (`Authorization: Bearer <secret>`)
 - **Basic Auth password** for ttyd (username: `nomadflow`)
 - **Query parameter** for WebSocket proxy (`/terminal/ws?token=<secret>`)
+
+### `[tunnel]`
+
+Settings for the public tunnel (`nomadflow serve --public`). See [Public Tunnel](/docs/server/tunnel).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `relay_host` | string | `relay.nomadflowcode.dev` | Hostname of the relay server. |
+| `relay_port` | integer | `7835` | Port of the bore server on the relay. |
+| `relay_secret` | string | *(built-in)* | Shared secret for relay registration. Pre-configured for the community relay — only change this if you self-host. |
+| `subdomain` | string | `""` (random) | Preferred subdomain for a stable public URL. When set, your tunnel always uses `https://<subdomain>.tunnel.nomadflowcode.dev` instead of a random one. Must be 3–32 characters, alphanumeric and hyphens only. |
+
+#### Stable subdomain
+
+By default, each `nomadflow serve --public` generates a new random subdomain, which means a new QR code to scan every time. Set `subdomain` to keep the same URL across restarts:
+
+```toml
+[tunnel]
+subdomain = "fabien"
+# → https://fabien.tunnel.nomadflowcode.dev
+```
+
+If your IP already holds the subdomain (e.g. after a server restart), it is re-registered automatically. If another IP holds it, registration fails with `409 Conflict`.

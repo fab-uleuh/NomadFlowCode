@@ -11,6 +11,7 @@ The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP ser
 |---------|----------|
 | `nomadflow` | Starts the server in the background, then launches the TUI wizard. Server stops gracefully when TUI exits. |
 | `nomadflow serve` | Server-only mode in foreground with full tracing/logging. Ideal for headless or Docker deployments. Handles Ctrl+C and SIGTERM gracefully. |
+| `nomadflow serve --public` | Same as `serve`, but also opens a public tunnel via `*.tunnel.nomadflowcode.dev`. Displays a QR code for instant mobile connection. See [Public Tunnel](/docs/server/tunnel). |
 | `nomadflow start` | Starts the server as a background daemon. PID file: `~/.nomadflowcode/nomadflow.pid`, logs: `~/.nomadflowcode/nomadflow.log`. |
 | `nomadflow stop` | Stops the background daemon via SIGTERM (graceful shutdown). |
 
@@ -38,7 +39,8 @@ This applies to all modes: `serve` (foreground), `start`/`stop` (daemon), and th
 ## Routes
 
 - `GET /health` — health check (no auth)
-- `POST /api/*` — repo and feature management (Bearer token auth)
+- `POST /api/*` — repo and feature management (Bearer or Basic auth)
+- `GET /terminal` — HTTP proxy to ttyd HTML/assets (Bearer or Basic auth)
 - `GET /terminal/ws` — WebSocket proxy to ttyd (token query param auth)
 
 See [API Reference](/docs/server/api) for full details.

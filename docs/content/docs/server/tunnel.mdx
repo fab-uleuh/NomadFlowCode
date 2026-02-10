@@ -1,0 +1,231 @@
+---
+title: Public Tunnel
+description: Expose your NomadFlow server to the internet with a single flag.
+---
+
+## Overview
+
+`nomadflow serve --public` creates a secure tunnel that exposes your local server to the internet via a subdomain like `https://abc123.tunnel.nomadflowcode.dev`. This lets you connect your mobile app from anywhere — no VPN, port forwarding, or firewall configuration needed.
+
+A **QR code** is displayed in the terminal. Scan it from the NomadFlow app to connect instantly.
+
+## Quick start
+
+```bash
+nomadflow serve --public
+```
+
+Output:
+
+```
+  ╔══════════════════════════════════════════════╗
+  ║          NomadFlow Server Ready              ║
+  ╠══════════════════════════════════════════════╣
+  ║                                              ║
+  ║          [QR Code]                           ║
+  ║                                              ║
+  ║  Scan this QR code from the app              ║
+  ║  or enter manually:                          ║
+  ║                                              ║
+  ║  URL    : https://abc123.tunnel.nomad...     ║
+  ║  Secret : your-secret                        ║
+  ║                                              ║
+  ╚══════════════════════════════════════════════╝
+```
+
+The QR code encodes a deep link (`nomadflowcode://connect?url=...&secret=...`) that the mobile app handles automatically.
+
+## Architecture
+
+```
+Mobile App
+  │
+  ▼
+abc123.tunnel.nomadflowcode.dev (HTTPS/WSS)
+  │
+  ▼
+Caddy (wildcard TLS, on-demand certs)
+  │
+  ▼
+nomadflow-relay (axum — subdomain routing + HTTP/WS proxy)
+  │
+  ▼
+bore server (TCP tunnel, dynamic ports 10000+)
+  │
+  ▼ (TCP tunnel)
+Your machine — bore client (embedded in nomadflow binary)
+  │
+  ▼
+nomadflow server (localhost:8080)
+```
+
+### How it works
+
+1. `nomadflow serve --public` starts the local server + an embedded [bore](https://github.com/ekzhang/bore) tunnel client.
+2. The bore client connects to the relay's bore server and obtains a random TCP port.
+3. The client registers with the relay API (`POST /_api/register`) and receives a 6-character subdomain.
+4. Caddy generates a TLS certificate on-demand for `{subdomain}.tunnel.nomadflowcode.dev`.
+5. All HTTPS/WSS traffic to the subdomain is routed through the relay → bore tunnel → your machine.
+
+### Components
+
+| Component | Role | Location |
+|-----------|------|----------|
+| **bore client** | TCP tunnel client, embedded in `nomadflow` binary | User's machine |
+| **bore server** | TCP tunnel server, accepts incoming tunnels | VPS (Docker, host mode) |
+| **nomadflow-relay** | Subdomain registration + HTTP/WS reverse proxy | VPS (Docker, vps-network) |
+| **Caddy** | TLS termination, wildcard cert generation | VPS (Docker) |
+
+## Configuration
+
+Default configuration (works out of the box, no setup needed):
+
+```toml
+[tunnel]
+relay_host = "relay.nomadflowcode.dev"
+relay_port = 7835
+# relay_secret is pre-configured — no need to set it
+```
+
+The tunnel uses the NomadFlow community relay by default. You can self-host your own relay (see [Self-hosting the relay](#self-hosting-the-relay)).
+
+### Stable subdomain
+
+By default, a random 6-character subdomain is generated on each `--public` start. To keep the same URL across restarts (no need to re-scan the QR code), set a preferred subdomain:
+
+```toml
+[tunnel]
+subdomain = "fabien"
+# → https://fabien.tunnel.nomadflowcode.dev
+```
+
+- 3–32 characters, alphanumeric and hyphens only, no leading/trailing hyphens.
+- If your IP already holds the subdomain (e.g. after a restart), it is re-registered automatically.
+- If another IP holds the subdomain, registration fails with `409 Conflict`.
+
+See [Configuration — `[tunnel]`](/docs/server/configuration#tunnel) for all options.
+
+## Security model
+
+### What is protected
+
+- **TLS everywhere**: All traffic between the mobile app and the tunnel endpoint uses HTTPS/WSS. Caddy generates per-subdomain Let's Encrypt certificates.
+- **Auth secret**: The `[auth] secret` in your `config.toml` protects your server's API and terminal. Without the correct secret, requests are rejected with 401.
+- **Bearer + Basic Auth**: The server accepts both `Authorization: Bearer <secret>` (API calls) and `Authorization: Basic <base64>` (WebView terminal). Both are validated against the same secret.
+- **WebSocket auth**: The terminal WebSocket uses a `?token=` query parameter, validated server-side.
+- **Subdomain isolation**: Each tunnel gets a unique subdomain — random by default (6 alphanumeric chars = 2.1 billion combinations), or a stable one you choose via `[tunnel] subdomain`.
+
+### What to be aware of
+
+- **The relay secret is public**: It is embedded in the binary to allow zero-config usage. It prevents non-NomadFlow traffic from registering tunnels, but it is not a security boundary. Your server's `[auth] secret` is the real protection.
+- **The QR code contains your auth secret**: Anyone who can see your terminal output or photograph the QR code can extract your server URL and secret. Use `--public` in trusted environments.
+- **Tunnels are ephemeral**: Subdomain mappings live in memory on the relay server. They expire after 24 hours and are lost on relay restart.
+- **Rate limiting**: The relay limits each IP to 3 active tunnels and 10 registrations per hour.
+- **Timing-safe comparison**: Auth token comparison uses standard `==`, not constant-time comparison. Acceptable for a local dev tool; not suitable for high-security production use.
+
+### Recommendations
+
+1. **Always set an auth secret** in `config.toml` when using `--public`:
+   ```toml
+   [auth]
+   secret = "a-strong-random-string"
+   ```
+2. **Don't leave `--public` running unattended** — stop the server when you're done.
+3. **Use a unique secret per machine** — don't reuse secrets across servers.
+
+## Self-hosting the relay
+
+You can run your own relay infrastructure instead of using the community one.
+
+### Prerequisites
+
+- A VPS with a public IP
+- A domain with wildcard DNS (`*.tunnel.yourdomain.com → A → VPS IP`)
+- Docker and Docker Compose
+
+### DNS setup
+
+Add these DNS records:
+
+| Type | Name | Value |
+|------|------|-------|
+| A | `relay.yourdomain.com` | VPS IP |
+| A | `*.tunnel.yourdomain.com` | VPS IP |
+
+### Deploy
+
+Reference files are in `nomadflow-rs/crates/nomadflow-relay/deploy/`.
+
+**docker-compose.yml:**
+
+```yaml
+services:
+  relay:
+    build: .
+    container_name: nomadflow-relay
+    restart: unless-stopped
+    networks:
+      - your-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - RELAY_SECRET=your-relay-secret
+      - RELAY_PORT=3000
+      - BORE_HOST=host.docker.internal
+
+  bore:
+    image: ekzhang/bore
+    container_name: nomadflow-bore
+    restart: unless-stopped
+    network_mode: "host"
+    command: server --secret your-relay-secret --min-port 10000
+```
+
+**Caddyfile** (add to existing config):
+
+```txt
+{
+  on_demand_tls {
+    ask http://nomadflow-relay:3000/_api/check
+  }
+}
+
+relay.yourdomain.com {
+  reverse_proxy nomadflow-relay:3000
+}
+
+*.tunnel.yourdomain.com {
+  tls {
+    on_demand
+  }
+  reverse_proxy nomadflow-relay:3000
+}
+```
+
+**Client configuration** (`~/.nomadflowcode/config.toml`):
+
+```toml
+[tunnel]
+relay_host = "relay.yourdomain.com"
+relay_port = 7835
+relay_secret = "your-relay-secret"
+```
+
+### Relay API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/_api/register` | POST | Register a tunnel. Body: `{ "port": 12345, "secret": "...", "subdomain": "fabien" }`. The `subdomain` field is optional — omit it for a random one. Returns: `{ "subdomain": "..." }` |
+| `/_api/check?domain=abc123.tunnel.example.com` | GET | Validate subdomain for Caddy on-demand TLS. Returns 200 or 404. |
+| `/_api/health` | GET | Health check. Returns `"ok"`. |
+
+### Management
+
+From `nomadflow-rs/`:
+
+```bash
+make relay-deploy   # Copy source + rebuild + restart
+make relay-logs     # Show relay + bore logs
+make relay-restart  # Restart without rebuilding
+make relay-status   # Show container status
+```
