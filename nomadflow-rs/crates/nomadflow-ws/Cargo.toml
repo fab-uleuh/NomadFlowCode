@@ -1,0 +1,11 @@
+[package]
+name = "nomadflow-ws"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+tracing = "0.1"

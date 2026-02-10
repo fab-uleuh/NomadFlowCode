@@ -1,0 +1,29 @@
+[package]
+name = "nomadflow-relay"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata.dist]
+dist = false
+
+[[bin]]
+name = "nomadflow-relay"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio", "client-legacy", "http1"] }
+serde = { version = "1", features = ["derive"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.9"
+dashmap = "6"
+color-eyre = "0.6"
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+subtle = "2"
+nomadflow-ws = { path = "../nomadflow-ws" }

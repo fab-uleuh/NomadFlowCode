@@ -2,24 +2,26 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
-    http::{Request, StatusCode},
+    http::{header, Request, StatusCode},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
+use base64::Engine;
+use subtle::ConstantTimeEq;
 
 use crate::state::AppState;
 
-/// Auth middleware: verifies Bearer token if a secret is configured.
+/// Auth middleware: verifies Bearer token or Basic Auth if a secret is configured.
 pub async fn auth_middleware(
     State(state): State<Arc<AppState>>,
     request: Request<axum::body::Body>,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Response {
     let secret = &state.settings.auth.secret;
 
     // Skip auth if no secret configured
     if secret.is_empty() {
-        return Ok(next.run(request).await);
+        return next.run(request).await;
     }
 
     // Check Authorization header
@@ -28,15 +30,34 @@ pub async fn auth_middleware(
         .get("Authorization")
         .and_then(|v| v.to_str().ok());
 
-    match auth_header {
-        Some(header) if header.starts_with("Bearer ") => {
-            let token = &header[7..];
-            if token == secret {
-                Ok(next.run(request).await)
-            } else {
-                Err(StatusCode::UNAUTHORIZED)
-            }
+    let authenticated = match auth_header {
+        Some(h) if h.starts_with("Bearer ") => {
+            h.as_bytes()[7..].ct_eq(secret.as_bytes()).into()
         }
-        _ => Err(StatusCode::UNAUTHORIZED),
+        Some(h) if h.starts_with("Basic ") => {
+            // Decode Basic Auth and check password matches secret
+            base64::engine::general_purpose::STANDARD
+                .decode(&h[6..])
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .and_then(|decoded| {
+                    decoded
+                        .split_once(':')
+                        .map(|(_, pw)| pw.as_bytes().ct_eq(secret.as_bytes()).into())
+                })
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
+
+    if authenticated {
+        next.run(request).await
+    } else {
+        // Include WWW-Authenticate so WebView sends Basic Auth credentials
+        (
+            StatusCode::UNAUTHORIZED,
+            [(header::WWW_AUTHENTICATE, "Basic realm=\"NomadFlow\"")],
+        )
+            .into_response()
     }
 }

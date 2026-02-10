@@ -150,13 +150,8 @@ impl App {
             }
 
             // Poll terminal events (50ms tick)
-            if let Some(event) = poll_event(Duration::from_millis(50)) {
-                match event {
-                    AppEvent::Key(key) => {
-                        self.handle_key(key.code, key.modifiers, tx.clone());
-                    }
-                    _ => {}
-                }
+            if let Some(AppEvent::Key(key)) = poll_event(Duration::from_millis(50)) {
+                self.handle_key(key.code, key.modifiers, tx.clone());
             }
 
             if self.should_quit {

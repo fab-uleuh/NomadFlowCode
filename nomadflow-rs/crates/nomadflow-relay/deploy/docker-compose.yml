@@ -1,0 +1,27 @@
+# Deploy on VPS: copy Cargo.toml, Dockerfile, src/ to a flat directory,
+# then place this docker-compose.yml + .env alongside them.
+# See: make relay-deploy (from nomadflow-rs/)
+services:
+  relay:
+    build: .
+    container_name: nomadflow-relay
+    restart: unless-stopped
+    networks:
+      - vps-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - RELAY_SECRET=${RELAY_SECRET}
+      - RELAY_PORT=3000
+      - BORE_HOST=host.docker.internal
+
+  bore:
+    image: ekzhang/bore
+    container_name: nomadflow-bore
+    restart: unless-stopped
+    network_mode: "host"
+    command: server --secret ${RELAY_SECRET} --min-port 10000
+
+networks:
+  vps-network:
+    external: true

@@ -1,0 +1,17 @@
+# Caddy configuration for NomadFlow tunnel relay
+#
+# Add this block to the existing Caddyfile on the VPS.
+# Requires wildcard DNS: *.tunnel.nomadflowcode.dev → A → VPS IP
+
+{
+	on_demand_tls {
+		ask http://nomadflow-relay:3000/_api/check
+	}
+}
+
+*.tunnel.nomadflowcode.dev {
+	tls {
+		on_demand
+	}
+	reverse_proxy nomadflow-relay:3000
+}

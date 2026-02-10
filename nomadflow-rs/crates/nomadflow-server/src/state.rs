@@ -6,6 +6,7 @@ pub struct AppState {
     pub settings: Settings,
     pub git: GitService,
     pub tmux: TmuxService,
+    pub http_client: reqwest::Client,
 }
 
 impl AppState {
@@ -16,6 +17,7 @@ impl AppState {
             settings,
             git,
             tmux,
+            http_client: reqwest::Client::new(),
         }
     }
 }

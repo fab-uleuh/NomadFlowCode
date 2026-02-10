@@ -1,6 +1,8 @@
 pub mod auth;
+pub mod display;
 pub mod routes;
 pub mod state;
+pub mod tunnel;
 
 use std::sync::Arc;
 
@@ -41,10 +43,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let api = Router::new()
         .merge(routes::repos::router())
         .merge(routes::features::router())
+        .merge(routes::terminal::http_proxy_router())
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     // WebSocket proxy to ttyd (auth via query param, handled in handler)
-    let ws = Router::new().merge(routes::terminal::router());
+    let ws = Router::new().merge(routes::terminal::ws_router());
 
     public
         .merge(api)
@@ -79,7 +82,24 @@ pub fn spawn_signal_handler(shutdown: CancellationToken) {
 
 /// Run the HTTP server (with tmux session setup and ttyd startup).
 /// The server shuts down gracefully when `shutdown` is cancelled.
-pub async fn serve(settings: Settings, shutdown: CancellationToken) -> color_eyre::Result<()> {
+/// When `public` is true, a bore tunnel is started and the server is exposed via the relay.
+pub async fn serve(
+    mut settings: Settings,
+    shutdown: CancellationToken,
+    public: bool,
+) -> color_eyre::Result<()> {
+    // 0. Auto-generate a secret if --public and none configured
+    if public && settings.auth.secret.is_empty() {
+        use rand::Rng;
+        let secret: String = rand::rng()
+            .sample_iter(rand::distr::Alphanumeric)
+            .take(32)
+            .map(|b| b as char)
+            .collect();
+        tracing::warn!("No auth secret configured — generated a temporary one for this session");
+        settings.auth.secret = secret;
+    }
+
     // 1. Ensure tmux session exists (ttyd needs it)
     let tmux = TmuxService::new(&settings.tmux.session);
     if let Err(e) = tmux.ensure_session().await {
@@ -98,11 +118,40 @@ pub async fn serve(settings: Settings, shutdown: CancellationToken) -> color_eyr
     // 3. Build state and router
     let state = Arc::new(AppState::new(settings.clone()));
     let addr = format!("{}:{}", settings.api.host, settings.api.port);
-    let router = build_router(state);
-
-    info!(%addr, "NomadFlow server listening");
+    let router = build_router(state.clone());
 
     let listener = TcpListener::bind(&addr).await?;
+    info!(%addr, "NomadFlow server listening");
+
+    // 4. Start tunnel if --public
+    let connect_url = if public {
+        match tunnel::start_tunnel(
+            settings.api.port,
+            &settings.tunnel,
+            shutdown.clone(),
+            &state.http_client,
+        )
+        .await
+        {
+            Ok(info) => info.public_url,
+            Err(e) => {
+                tracing::warn!("Tunnel failed: {e}");
+                let local_ip = local_ip_address::local_ip()
+                    .map(|ip| ip.to_string())
+                    .unwrap_or_else(|_| "127.0.0.1".to_string());
+                format!("http://{local_ip}:{}", settings.api.port)
+            }
+        }
+    } else {
+        let local_ip = local_ip_address::local_ip()
+            .map(|ip| ip.to_string())
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        format!("http://{local_ip}:{}", settings.api.port)
+    };
+
+    // 5. Display connection info with QR code
+    display::print_connection_info(&connect_url, &settings.auth.secret, public);
+
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await?;

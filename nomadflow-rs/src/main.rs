@@ -26,7 +26,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Run the HTTP server in foreground
-    Serve,
+    Serve {
+        /// Expose the server publicly via tunnel
+        #[arg(long)]
+        public: bool,
+    },
     /// Start the server as a background daemon
     Start,
     /// Stop the background daemon
@@ -164,11 +168,11 @@ async fn main() -> Result<()> {
     settings.ensure_directories()?;
 
     match cli.command {
-        Some(Commands::Serve) => {
+        Some(Commands::Serve { public }) => {
             nomadflow_server::init_tracing();
             let shutdown = CancellationToken::new();
             nomadflow_server::spawn_signal_handler(shutdown.clone());
-            nomadflow_server::serve(settings, shutdown).await?;
+            nomadflow_server::serve(settings, shutdown, public).await?;
         }
         Some(Commands::Start) => {
             start_daemon(&settings)?;
@@ -186,7 +190,7 @@ async fn main() -> Result<()> {
             let shutdown = CancellationToken::new();
             let shutdown_clone = shutdown.clone();
             let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone)
+                nomadflow_server::serve(server_settings, shutdown_clone, false)
                     .await
                     .ok();
             });
@@ -211,7 +215,7 @@ async fn main() -> Result<()> {
             let shutdown = CancellationToken::new();
             let shutdown_clone = shutdown.clone();
             let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone)
+                nomadflow_server::serve(server_settings, shutdown_clone, false)
                     .await
                     .ok();
             });

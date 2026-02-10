@@ -60,21 +60,36 @@ impl Default for ApiConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct AuthConfig {
     pub secret: String,
 }
 
-impl Default for AuthConfig {
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct TunnelConfig {
+    pub relay_host: String,
+    pub relay_port: u16,
+    pub relay_secret: String,
+    /// Preferred subdomain for stable public URL. Empty = random (default).
+    pub subdomain: String,
+}
+
+impl Default for TunnelConfig {
     fn default() -> Self {
         Self {
-            secret: String::new(),
+            relay_host: "relay.nomadflowcode.dev".to_string(),
+            relay_port: 7835,
+            // Public shared secret — embedded in the binary so users don't need to configure anything.
+            // This prevents casual abuse from non-nomadflow traffic but is not a real secret.
+            relay_secret: "2990b3a121ae2a13492e71b4e41b33f7d0a7c5beea722974".to_string(),
+            subdomain: String::new(),
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub paths: PathsConfig,
@@ -82,18 +97,7 @@ pub struct Settings {
     pub ttyd: TtydConfig,
     pub api: ApiConfig,
     pub auth: AuthConfig,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            paths: PathsConfig::default(),
-            tmux: TmuxConfig::default(),
-            ttyd: TtydConfig::default(),
-            api: ApiConfig::default(),
-            auth: AuthConfig::default(),
-        }
-    }
+    pub tunnel: TunnelConfig,
 }
 
 impl Settings {

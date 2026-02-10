@@ -138,11 +138,7 @@ async fn switch_feature(
     let feature = features.iter().find(|f| f.name == request.feature_name);
 
     let worktree_path = if let Some(f) = feature {
-        if f.is_main {
-            f.worktree_path.clone()
-        } else {
-            f.worktree_path.clone()
-        }
+        f.worktree_path.clone()
     } else {
         // Feature doesn't exist, create it
         let (wt, _branch) = state

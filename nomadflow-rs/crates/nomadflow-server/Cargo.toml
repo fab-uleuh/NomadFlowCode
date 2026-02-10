@@ -17,6 +17,14 @@ serde_json = "1"
 base64 = "0.22"
 futures-util = "0.3"
 color-eyre = "0.6"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+qrcode = "0.14"
+bore-cli = "0.6"
+local-ip-address = "0.6"
+urlencoding = "2"
+rand = "0.9"
+subtle = "2"
+nomadflow-ws = { path = "../nomadflow-ws" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
