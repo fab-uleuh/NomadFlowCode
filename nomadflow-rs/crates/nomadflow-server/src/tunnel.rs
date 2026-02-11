@@ -40,6 +40,7 @@ pub async fn start_tunnel(
     info!(
         relay_host = %config.relay_host,
         relay_port = config.relay_port,
+        preferred_subdomain = %config.subdomain,
         "Connecting to tunnel relay…"
     );
 
