@@ -17,10 +17,6 @@ struct Cli {
     /// Show tmux status and exit
     #[arg(long)]
     status: bool,
-
-    /// Attach directly to a feature
-    #[arg(long)]
-    attach: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -47,6 +43,11 @@ enum Commands {
     Unlink {
         /// Name of the linked repository to remove
         name: Option<String>,
+    },
+    /// Attach to an existing tmux window (no server needed)
+    Attach {
+        /// Window name (e.g. "omstudio:my-feature"). If omitted, shows a picker.
+        window: Option<String>,
     },
 }
 
@@ -304,6 +305,58 @@ fn unlink_repo(settings: &Settings, name: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn attach_local(settings: &Settings, window: Option<String>) -> Result<()> {
+    let session = &settings.tmux.session;
+
+    if !nomadflow_tui::tmux_local::session_exists(session) {
+        return Err(eyre!(
+            "No tmux session '{session}' found. Start one with `nomadflow` first."
+        ));
+    }
+
+    if let Some(w) = window {
+        nomadflow_tui::tmux_local::attach_session_target(session, Some(&w));
+        return Ok(());
+    }
+
+    let windows = nomadflow_tui::tmux_local::list_windows(session);
+
+    if windows.is_empty() {
+        return Err(eyre!("Session '{session}' has no windows."));
+    }
+
+    if windows.len() == 1 {
+        nomadflow_tui::tmux_local::attach_session_target(session, Some(&windows[0].name));
+        return Ok(());
+    }
+
+    // Multiple windows → show picker
+    let items: Vec<nomadflow_tui::PickItem> = windows
+        .iter()
+        .map(|w| {
+            let cmd = nomadflow_tui::tmux_local::get_pane_command(session, &w.name);
+            let idle = nomadflow_tui::tmux_local::is_shell_idle_str(cmd.as_deref());
+            let detail = match &cmd {
+                Some(c) if !idle => c.clone(),
+                _ => "idle".to_string(),
+            };
+            nomadflow_tui::PickItem {
+                label: w.name.clone(),
+                detail,
+            }
+        })
+        .collect();
+
+    match nomadflow_tui::pick_from_list("Attach to window:", &items)? {
+        Some(idx) => {
+            nomadflow_tui::tmux_local::attach_session_target(session, Some(&windows[idx].name));
+        }
+        None => {} // cancelled
+    }
+
+    Ok(())
+}
+
 fn show_daemon_status(settings: &Settings) {
     let pid_path = pid_file(settings);
 
@@ -350,34 +403,12 @@ async fn main() -> Result<()> {
         Some(Commands::Unlink { name }) => {
             unlink_repo(&settings, name.as_deref())?;
         }
+        Some(Commands::Attach { window }) => {
+            attach_local(&settings, window)?;
+        }
         None if cli.status => {
             show_daemon_status(&settings);
             nomadflow_tui::run_status(&settings);
-        }
-        None if cli.attach.is_some() => {
-            let _feature = cli.attach.unwrap();
-            let server_settings = settings.clone();
-            let shutdown = CancellationToken::new();
-            let shutdown_clone = shutdown.clone();
-            let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone, false, true)
-                    .await
-                    .ok();
-            });
-
-            // Give server a moment to start
-            tokio::time::sleep(Duration::from_millis(200)).await;
-
-            let session = settings.tmux.session.clone();
-
-            // Graceful shutdown instead of abort
-            shutdown.cancel();
-            tokio::select! {
-                _ = server_handle => {}
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-            }
-
-            nomadflow_tui::exec_tmux_attach(&session);
         }
         None => {
             // Default: spawn server in background + TUI wizard

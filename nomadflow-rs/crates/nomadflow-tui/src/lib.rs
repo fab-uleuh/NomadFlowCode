@@ -86,9 +86,21 @@ pub fn run_status(settings: &Settings) {
     }
 }
 
-/// Exec into tmux attach (replaces the process for --attach mode).
-pub fn exec_tmux_attach(session: &str) {
-    tmux_local::attach_session(session);
+/// Run only the first-run setup wizard (no server needed).
+/// Returns the updated Settings on success, or None if cancelled.
+pub fn run_setup(settings: Settings) -> Result<Option<Settings>> {
+    let mut terminal = init_terminal()?;
+    let mut app = app::App::new(settings);
+
+    let completed = app.run_setup_loop(&mut terminal)?;
+
+    restore_terminal(&mut terminal)?;
+
+    if completed {
+        Ok(Some(app.settings))
+    } else {
+        Ok(None)
+    }
 }
 
 // ── Inline mini-TUI pickers ──────────────────────────────────────────

@@ -80,8 +80,16 @@ pub fn is_shell_idle_str(command: Option<&str>) -> bool {
 }
 
 pub fn attach_session(session: &str) {
+    attach_session_target(session, None);
+}
+
+pub fn attach_session_target(session: &str, window: Option<&str>) {
+    let target = match window {
+        Some(w) => format!("{session}:{w}"),
+        None => session.to_string(),
+    };
     let _ = Command::new("tmux")
-        .args(["attach-session", "-t", session])
+        .args(["attach-session", "-t", &target])
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
