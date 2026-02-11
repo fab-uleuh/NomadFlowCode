@@ -14,6 +14,7 @@ services:
       - RELAY_SECRET=${RELAY_SECRET}
       - RELAY_PORT=3000
       - BORE_HOST=host.docker.internal
+      - MIN_BORE_PORT=10000
 
   bore:
     image: ekzhang/bore

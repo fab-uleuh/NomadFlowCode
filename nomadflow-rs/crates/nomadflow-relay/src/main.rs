@@ -38,6 +38,8 @@ struct RelayState {
     relay_secret: String,
     /// Host where bore tunnel ports are accessible (default: 127.0.0.1, in Docker: host.docker.internal)
     bore_host: String,
+    /// Minimum allowed bore port (must match bore --min-port)
+    min_bore_port: u16,
     /// HTTP client for proxying to bore tunnels
     http_client: HyperClient<hyper_util::client::legacy::connect::HttpConnector, Body>,
 }
@@ -79,10 +81,16 @@ async fn register(
 ) -> Result<Json<RegisterResponse>, StatusCode> {
     let client_ip = extract_client_ip(&headers, &ConnectInfo(addr));
 
-    // Reject privileged ports
-    if req.port < 1024 {
-        warn!(port = req.port, %client_ip, "Registration rejected: port below 1024");
+    // Reject ports below the bore minimum
+    if let Err(msg) = validate_port(req.port, state.min_bore_port) {
+        warn!(port = req.port, %client_ip, "Registration rejected: {msg}");
         return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Reject port already registered by a different IP (cross-tunnel poisoning)
+    if is_port_taken_by_other(&state.tunnels, req.port, client_ip) {
+        warn!(port = req.port, %client_ip, "Registration rejected: port already registered by another IP");
+        return Err(StatusCode::CONFLICT);
     }
 
     // Verify secret (constant-time comparison)
@@ -170,6 +178,26 @@ async fn register(
     info!(subdomain = %subdomain, port = req.port, %client_ip, "Tunnel registered");
 
     Ok(Json(RegisterResponse { subdomain }))
+}
+
+/// Validate that a bore port is within the allowed range.
+fn validate_port(port: u16, min_bore_port: u16) -> Result<(), String> {
+    if port < min_bore_port {
+        Err(format!("port {port} is below minimum {min_bore_port}"))
+    } else {
+        Ok(())
+    }
+}
+
+/// Check if a bore port is already registered by a different client IP.
+fn is_port_taken_by_other(
+    tunnels: &DashMap<String, TunnelEntry>,
+    port: u16,
+    client_ip: IpAddr,
+) -> bool {
+    tunnels
+        .iter()
+        .any(|entry| entry.value().bore_port == port && entry.value().client_ip != client_ip)
 }
 
 fn generate_subdomain() -> String {
@@ -436,14 +464,19 @@ async fn main() -> color_eyre::Result<()> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3000);
+    let min_bore_port: u16 = std::env::var("MIN_BORE_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(10000);
 
-    info!(%bore_host, "Bore tunnel host");
+    info!(%bore_host, min_bore_port, "Bore tunnel host");
 
     let state = Arc::new(RelayState {
         tunnels: DashMap::new(),
         rate_limits: DashMap::new(),
         relay_secret,
         bore_host,
+        min_bore_port,
         http_client: HyperClient::builder(TokioExecutor::new()).build_http(),
     });
 
@@ -475,4 +508,70 @@ async fn main() -> color_eyre::Result<()> {
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::Ipv4Addr;
+
+    #[test]
+    fn validate_port_rejects_below_minimum() {
+        assert!(validate_port(5433, 10000).is_err());
+        assert!(validate_port(1023, 10000).is_err());
+        assert!(validate_port(9999, 10000).is_err());
+    }
+
+    #[test]
+    fn validate_port_accepts_at_or_above_minimum() {
+        assert!(validate_port(10000, 10000).is_ok());
+        assert!(validate_port(10001, 10000).is_ok());
+        assert!(validate_port(65535, 10000).is_ok());
+    }
+
+    #[test]
+    fn port_taken_by_other_ip_detected() {
+        let tunnels: DashMap<String, TunnelEntry> = DashMap::new();
+        let ip_a: IpAddr = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+        let ip_b: IpAddr = IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8));
+
+        tunnels.insert(
+            "test-sub".to_string(),
+            TunnelEntry {
+                bore_port: 12345,
+                last_used: Instant::now(),
+                client_ip: ip_a,
+            },
+        );
+
+        // Different IP trying same port → taken
+        assert!(is_port_taken_by_other(&tunnels, 12345, ip_b));
+    }
+
+    #[test]
+    fn port_allowed_for_same_ip() {
+        let tunnels: DashMap<String, TunnelEntry> = DashMap::new();
+        let ip_a: IpAddr = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+
+        tunnels.insert(
+            "test-sub".to_string(),
+            TunnelEntry {
+                bore_port: 12345,
+                last_used: Instant::now(),
+                client_ip: ip_a,
+            },
+        );
+
+        // Same IP re-registering same port → allowed
+        assert!(!is_port_taken_by_other(&tunnels, 12345, ip_a));
+    }
+
+    #[test]
+    fn port_allowed_when_not_registered() {
+        let tunnels: DashMap<String, TunnelEntry> = DashMap::new();
+        let ip_a: IpAddr = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+
+        // No tunnels registered → port is free
+        assert!(!is_port_taken_by_other(&tunnels, 12345, ip_a));
+    }
 }
