@@ -16,7 +16,6 @@ export default function AddServerScreen() {
 
   const [name, setName] = useState('');
   const [apiUrl, setApiUrl] = useState('');
-  const [ttydUrl, setTtydUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -27,38 +26,20 @@ export default function AddServerScreen() {
     if (existingServer) {
       setName(existingServer.name);
       setApiUrl(existingServer.apiUrl || '');
-      setTtydUrl(existingServer.ttydUrl || '');
       setAuthToken(existingServer.authToken || '');
     }
   }, [existingServer]);
 
-  // Pre-fill from deep link: nomadflowcode://connect?url=...&secret=...
+  // Pre-fill from deep link: nomadflowcode://add-server?url=...&secret=...
   useEffect(() => {
     if (params.url && !isEditing) {
-      handleApiUrlChange(params.url);
+      setApiUrl(params.url);
       if (params.secret) setAuthToken(params.secret);
-      // Auto-generate a name from the URL hostname
-      try {
-        const hostname = new URL(params.url).hostname;
-        setName(hostname.split('.')[0]);
-      } catch {
-        // ignore
-      }
+      // Auto-generate a name from the URL hostname (string ops, no new URL())
+      const match = params.url.match(/^https?:\/\/([^:/]+)/);
+      if (match) setName(match[1].split('.')[0]);
     }
   }, [params.url, params.secret]);
-
-  /** Auto-derive ttydUrl from apiUrl: {apiUrl}/terminal (proxied through the server). */
-  const handleApiUrlChange = (value: string) => {
-    setApiUrl(value);
-    try {
-      const url = new URL(value);
-      // Terminal is now proxied through the API server at /terminal
-      url.pathname = '/terminal';
-      setTtydUrl(url.toString().replace(/\/$/, ''));
-    } catch {
-      // Keep current ttydUrl if apiUrl is not yet valid
-    }
-  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -82,7 +63,6 @@ export default function AddServerScreen() {
       const serverData = {
         name: name.trim(),
         apiUrl: apiUrl.trim(),
-        ttydUrl: ttydUrl.trim() || undefined,
         authToken: authToken.trim() || undefined,
       };
 
@@ -91,7 +71,7 @@ export default function AddServerScreen() {
       } else {
         await addServer(serverData);
       }
-      router.back();
+      router.replace('/');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de sauvegarder le serveur');
     } finally {
@@ -107,7 +87,7 @@ export default function AddServerScreen() {
           headerRight: () => (
             <Button variant="ghost" onPress={handleSubmit} disabled={isSubmitting}>
               <Text className="text-primary font-semibold">
-                {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
+                {isSubmitting ? 'Enregistrement...' : isEditing ? 'Mettre à jour' : 'Enregistrer'}
               </Text>
             </Button>
           ),
@@ -138,7 +118,7 @@ export default function AddServerScreen() {
                 <Input
                   placeholder="http://192.168.1.100:8080"
                   value={apiUrl}
-                  onChangeText={handleApiUrlChange}
+                  onChangeText={setApiUrl}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
@@ -146,22 +126,6 @@ export default function AddServerScreen() {
                 />
                 <Text className="text-xs text-muted-foreground">
                   L'URL de l'API NomadFlow (port 8080 par défaut).
-                </Text>
-              </View>
-
-              <View className="gap-2">
-                <Label nativeID="ttydUrl">URL Terminal (ttyd)</Label>
-                <Input
-                  placeholder="http://192.168.1.100:8080/terminal"
-                  value={ttydUrl}
-                  onChangeText={setTtydUrl}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  aria-labelledby="ttydUrl"
-                />
-                <Text className="text-xs text-muted-foreground">
-                  Se remplit automatiquement depuis l'URL API (/terminal par défaut).
                 </Text>
               </View>
 

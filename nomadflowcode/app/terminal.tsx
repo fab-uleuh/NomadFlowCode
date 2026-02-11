@@ -45,9 +45,11 @@ const ZOOM_MIN = 8;
 const ZOOM_MAX = 56;
 const ZOOM_STEP = 2;
 
-/** Terminal page URL — connects directly to ttyd. */
-const buildTerminalUrl = (server: { ttydUrl?: string }): string =>
-  (server.ttydUrl || 'http://localhost:7681').replace(/\/+$/, '');
+/** Terminal page URL — derived from the API URL. */
+const buildTerminalUrl = (server: { apiUrl?: string }): string => {
+  const base = (server.apiUrl || 'http://localhost:8080').replace(/\/+$/, '');
+  return `${base}/terminal`;
+};
 
 const KEYBOARD_SHORTCUTS = [
   { label: 'Ctrl+C', char: '\x03', icon: XCircleIcon },

@@ -4,63 +4,15 @@ import React, { createContext, useContext, useState, useEffect, useCallback, typ
 import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings, TerminalShortcut } from '../types';
 
-/**
- * Migrate old server formats to current format.
- * Handles: old 'url' (WebSocket) field, old 'ttydUrl' field.
- */
-function migrateServer(server: any): Server {
-  const migrated: Server = {
-    id: server.id,
-    name: server.name,
-    apiUrl: server.apiUrl,
-    ttydUrl: server.ttydUrl,
-    authToken: server.authToken,
-    lastConnected: server.lastConnected,
+/** Strip legacy fields (ttydUrl, url) when loading from storage. */
+function cleanServer(raw: any): Server {
+  return {
+    id: raw.id,
+    name: raw.name,
+    apiUrl: raw.apiUrl || 'http://localhost:8080',
+    authToken: raw.authToken,
+    lastConnected: raw.lastConnected,
   };
-
-  // Derive apiUrl from old fields if missing
-  if (!migrated.apiUrl) {
-    const ttydUrl = server.ttydUrl || '';
-    if (ttydUrl) {
-      try {
-        const url = new URL(ttydUrl);
-        url.port = url.port === '7681' ? '8080' : url.port;
-        migrated.apiUrl = url.toString().replace(/\/$/, '');
-      } catch {
-        migrated.apiUrl = ttydUrl.replace(':7681', ':8080');
-      }
-    } else {
-      const oldUrl = server.url || '';
-      if (oldUrl) {
-        const httpUrl = oldUrl
-          .replace('wss://', 'https://')
-          .replace('ws://', 'http://')
-          .replace('/ws', '');
-        try {
-          const url = new URL(httpUrl);
-          url.port = url.port === '7681' ? '8080' : url.port;
-          migrated.apiUrl = url.toString().replace(/\/$/, '');
-        } catch {
-          migrated.apiUrl = httpUrl.replace(':7681', ':8080');
-        }
-      } else {
-        migrated.apiUrl = 'http://localhost:8080';
-      }
-    }
-  }
-
-  // Ensure ttydUrl is set (derive from apiUrl if missing)
-  if (!migrated.ttydUrl && migrated.apiUrl) {
-    try {
-      const url = new URL(migrated.apiUrl);
-      url.pathname = '/terminal';
-      migrated.ttydUrl = url.toString().replace(/\/$/, '');
-    } catch {
-      // ignore
-    }
-  }
-
-  return migrated;
 }
 
 interface LastSelection {
@@ -156,11 +108,11 @@ export function StorageProvider({ children }: StorageProviderProps) {
 
       if (serversData) {
         const parsed = JSON.parse(serversData);
-        const migrated = parsed.map(migrateServer);
-        setServers(migrated);
-        // Save migrated servers back to storage
-        if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
-          await AsyncStorage.setItem(STORAGE_KEYS.SERVERS, JSON.stringify(migrated));
+        const cleaned = parsed.map(cleanServer);
+        setServers(cleaned);
+        // Save cleaned servers back to storage (strips legacy fields)
+        if (JSON.stringify(parsed) !== JSON.stringify(cleaned)) {
+          await AsyncStorage.setItem(STORAGE_KEYS.SERVERS, JSON.stringify(cleaned));
         }
       }
       if (recentReposData) setRecentRepos(JSON.parse(recentReposData));
