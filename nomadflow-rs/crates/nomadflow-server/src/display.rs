@@ -50,10 +50,10 @@ fn render_qr_unicode(code: &QrCode) -> String {
 pub fn print_connection_info(connect_url: &str, secret: &str, public: bool) {
     let encoded_url = urlencoding::encode(connect_url);
     let deep_link = if secret.is_empty() {
-        format!("nomadflowcode://connect?url={encoded_url}")
+        format!("nomadflowcode://add-server?url={encoded_url}")
     } else {
         let encoded_secret = urlencoding::encode(secret);
-        format!("nomadflowcode://connect?url={encoded_url}&secret={encoded_secret}")
+        format!("nomadflowcode://add-server?url={encoded_url}&secret={encoded_secret}")
     };
 
     let qr_block = match QrCode::new(&deep_link) {
@@ -65,11 +65,11 @@ pub fn print_connection_info(connect_url: &str, secret: &str, public: bool) {
     let qr_width = qr_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
 
     // Compute box width: at least as wide as QR + some padding, or URL line
-    let url_line = format!("  URL    : {connect_url}");
+    let url_line = format!("  URL      : {connect_url}");
     let secret_line = if secret.is_empty() {
         String::new()
     } else {
-        format!("  Secret : {secret}")
+        format!("  Secret   : {secret}")
     };
 
     let content_width = [

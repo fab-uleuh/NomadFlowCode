@@ -60,6 +60,8 @@ export default function RootLayout() {
   useEffect(() => {
     function handleDeepLink(event: { url: string }) {
       const parsed = Linking.parse(event.url);
+      // Only handle old `connect` deep link path manually — `add-server` is handled
+      // automatically by Expo Router (file-based routing on app/add-server.tsx)
       if (parsed.hostname === 'connect' && parsed.queryParams?.url) {
         const serverUrl = parsed.queryParams.url as string;
         if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
@@ -71,6 +73,7 @@ export default function RootLayout() {
           params: {
             url: parsed.queryParams.url as string,
             secret: (parsed.queryParams.secret as string) || '',
+            terminal: (parsed.queryParams.terminal as string) || '',
           },
         });
       }
