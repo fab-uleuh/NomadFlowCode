@@ -1,4 +1,6 @@
-VPS := vps-omstudio
+include ../.env
+
+VPS := $(VPS_HOST)
 RELAY_DIR := /home/ubuntu/nomadflow-relay
 RELAY_SRC := crates/nomadflow-relay
 
