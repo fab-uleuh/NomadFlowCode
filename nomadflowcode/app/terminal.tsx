@@ -36,6 +36,8 @@ import {
   Pressable,
   Animated,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
@@ -302,6 +304,22 @@ export default function TerminalScreen() {
     setTimeout(() => webViewRef.current?.reload(), settings.reconnectDelay);
   }, [connectionState.reconnectAttempts, settings]);
 
+  // Resize xterm when keyboard shows/hides so it reflows to the visible area
+  useEffect(() => {
+    const resizeTerminal = () => {
+      // Small delay to let KeyboardAvoidingView finish its layout adjustment
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(`
+          window.dispatchEvent(new Event('resize'));
+          true;
+        `);
+      }, 100);
+    };
+    const showSub = Keyboard.addListener('keyboardDidShow', resizeTerminal);
+    const hideSub = Keyboard.addListener('keyboardDidHide', resizeTerminal);
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
   const executeShortcut = useCallback((shortcut: TerminalShortcut) => {
     sendToTerminal(shortcut.command + (shortcut.autoExecute ? '\n' : ''));
   }, [sendToTerminal]);
@@ -373,6 +391,10 @@ export default function TerminalScreen() {
   return (
     <SafeAreaView className="flex-1 bg-black">
       <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
 
       {/* Header */}
       <Animated.View
@@ -499,6 +521,8 @@ export default function TerminalScreen() {
           </View>
         )}
       </View>
+
+      </KeyboardAvoidingView>
 
       {/* Shortcuts Panel */}
       <Animated.View
