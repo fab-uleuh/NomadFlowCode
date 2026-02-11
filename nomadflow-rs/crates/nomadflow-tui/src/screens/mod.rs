@@ -5,3 +5,4 @@ pub mod repo_picker;
 pub mod resume;
 pub mod server_add;
 pub mod server_picker;
+pub mod setup;

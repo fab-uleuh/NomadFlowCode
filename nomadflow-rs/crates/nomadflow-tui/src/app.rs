@@ -24,6 +24,7 @@ pub enum AppResult {
 /// Wizard screens.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
+    Setup,
     Resume,
     ServerPicker,
     ServerAdd,
@@ -64,6 +65,12 @@ pub struct App {
     pub server_add_name: String,
     pub server_add_url: String,
 
+    // Setup wizard state
+    pub setup_step: u8,
+    pub setup_secret: String,
+    pub setup_subdomain: String,
+    pub setup_public: bool,
+
     // Result
     pub should_quit: bool,
     pub attach_session: Option<String>,
@@ -77,15 +84,29 @@ pub struct CliFeature {
 }
 
 impl App {
+    /// Generate a random password (16 chars: a-z, 0-9, hyphens).
+    fn generate_password() -> String {
+        use rand::Rng;
+        const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789-";
+        let mut rng = rand::rng();
+        (0..16)
+            .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
+            .collect()
+    }
+
     pub fn new(settings: Settings) -> Self {
         let servers = state::load_servers(&settings);
         let cli_state = state::load_state(&settings);
+
+        let needs_setup = !settings.config_file().exists();
 
         let has_last = cli_state.last_server.is_some()
             && cli_state.last_repo.is_some()
             && cli_state.last_feature.is_some();
 
-        let initial_screen = if has_last {
+        let initial_screen = if needs_setup {
+            Screen::Setup
+        } else if has_last {
             Screen::Resume
         } else {
             Screen::ServerPicker
@@ -96,6 +117,13 @@ impl App {
             Some(servers[0].clone())
         } else {
             None
+        };
+
+        // Pre-generate a password for the setup wizard
+        let setup_secret = if needs_setup {
+            Self::generate_password()
+        } else {
+            String::new()
         };
 
         Self {
@@ -119,6 +147,10 @@ impl App {
             server_add_step: 0,
             server_add_name: String::new(),
             server_add_url: String::new(),
+            setup_step: 0,
+            setup_secret,
+            setup_subdomain: String::new(),
+            setup_public: false,
             should_quit: false,
             attach_session: None,
         }
@@ -190,6 +222,7 @@ impl App {
 
         // Content
         match self.screen {
+            Screen::Setup => screens::setup::render(frame, chunks[2], self),
             Screen::Resume => screens::resume::render(frame, chunks[2], self),
             Screen::ServerPicker => screens::server_picker::render(frame, chunks[2], self),
             Screen::ServerAdd => screens::server_add::render(frame, chunks[2], self),
@@ -200,10 +233,10 @@ impl App {
         }
 
         // Footer
-        let footer_text = if self.screen == Screen::Attaching {
-            ""
-        } else {
-            "Escape: back  q: quit"
+        let footer_text = match self.screen {
+            Screen::Attaching => "",
+            Screen::Setup => "Escape: back",
+            _ => "Escape: back  q: quit",
         };
         let footer = ratatui::widgets::Paragraph::new(footer_text)
             .style(Style::default().fg(Color::DarkGray));
@@ -220,6 +253,7 @@ impl App {
         if code == KeyCode::Char('q')
             && self.screen != Screen::FeatureCreate
             && self.screen != Screen::ServerAdd
+            && self.screen != Screen::Setup
         {
             self.should_quit = true;
             return;
@@ -236,6 +270,7 @@ impl App {
 
         // Screen-specific keys
         match self.screen {
+            Screen::Setup => self.handle_setup_key(code),
             Screen::Resume => self.handle_resume_key(code, tx),
             Screen::ServerPicker => self.handle_server_picker_key(code, tx),
             Screen::ServerAdd => self.handle_server_add_key(code),
@@ -276,6 +311,9 @@ impl App {
                 self.input_cursor = 0;
                 self.confirm_step = false;
                 self.selected_index = 0;
+            }
+            Screen::Setup => {
+                self.should_quit = true;
             }
             Screen::Resume => {
                 self.screen = Screen::ServerPicker;
@@ -454,6 +492,178 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn handle_setup_key(&mut self, code: KeyCode) {
+        match self.setup_step {
+            0 => {
+                // Password choice: up/down + enter
+                match code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.selected_index > 0 {
+                            self.selected_index -= 1;
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if self.selected_index < 1 {
+                            self.selected_index += 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if self.selected_index == 0 {
+                            // Generate — secret already pre-generated, go to public choice
+                            self.setup_step = 2;
+                            self.selected_index = 0;
+                        } else {
+                            // Custom password input
+                            self.setup_step = 1;
+                            self.input_text.clear();
+                            self.input_cursor = 0;
+                        }
+                    }
+                    KeyCode::Esc => self.go_back(),
+                    _ => {}
+                }
+            }
+            1 => {
+                // Custom password text input
+                match code {
+                    KeyCode::Char(c) => {
+                        self.input_text.insert(self.input_cursor, c);
+                        self.input_cursor += 1;
+                    }
+                    KeyCode::Backspace => {
+                        if self.input_cursor > 0 {
+                            self.input_cursor -= 1;
+                            self.input_text.remove(self.input_cursor);
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.input_cursor > 0 {
+                            self.input_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if self.input_cursor < self.input_text.len() {
+                            self.input_cursor += 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        let trimmed = self.input_text.trim().to_string();
+                        if !trimmed.is_empty() {
+                            self.setup_secret = trimmed;
+                            self.input_text.clear();
+                            self.input_cursor = 0;
+                            self.setup_step = 2;
+                        }
+                    }
+                    KeyCode::Esc => {
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                        self.setup_step = 0;
+                        self.selected_index = 0;
+                    }
+                    _ => {}
+                }
+            }
+            2 => {
+                // Public mode? y/n
+                match code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        self.setup_public = true;
+                        self.setup_step = 3;
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') => {
+                        self.setup_public = false;
+                        self.setup_step = 4; // skip subdomain, go to confirm
+                    }
+                    KeyCode::Esc => {
+                        self.setup_step = 0;
+                        self.selected_index = 0;
+                    }
+                    _ => {}
+                }
+            }
+            3 => {
+                // Subdomain input
+                match code {
+                    KeyCode::Char(c) => {
+                        self.input_text.insert(self.input_cursor, c);
+                        self.input_cursor += 1;
+                    }
+                    KeyCode::Backspace => {
+                        if self.input_cursor > 0 {
+                            self.input_cursor -= 1;
+                            self.input_text.remove(self.input_cursor);
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.input_cursor > 0 {
+                            self.input_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if self.input_cursor < self.input_text.len() {
+                            self.input_cursor += 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        self.setup_subdomain = self.input_text.trim().to_string();
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                        self.setup_step = 4;
+                    }
+                    KeyCode::Esc => {
+                        self.input_text.clear();
+                        self.input_cursor = 0;
+                        self.setup_step = 2;
+                    }
+                    _ => {}
+                }
+            }
+            4 => {
+                // Confirm y/n
+                match code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                        self.save_setup();
+                    }
+                    KeyCode::Char('n') | KeyCode::Char('N') => {
+                        // Restart setup
+                        self.setup_step = 0;
+                        self.selected_index = 0;
+                        self.setup_secret = Self::generate_password();
+                        self.setup_subdomain.clear();
+                        self.setup_public = false;
+                    }
+                    KeyCode::Esc => {
+                        if self.setup_public {
+                            self.setup_step = 3;
+                            self.input_text = self.setup_subdomain.clone();
+                            self.input_cursor = self.input_text.len();
+                        } else {
+                            self.setup_step = 2;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn save_setup(&mut self) {
+        self.settings.auth.secret = self.setup_secret.clone();
+        self.settings.tunnel.subdomain = self.setup_subdomain.clone();
+        if let Err(e) = self.settings.save() {
+            self.error = Some(format!("Failed to save config: {e}"));
+            return;
+        }
+        // Transition to normal flow
+        self.screen = Screen::ServerPicker;
+        self.selected_index = 0;
+        self.setup_step = 0;
     }
 
     fn handle_repo_picker_key(
@@ -749,8 +959,8 @@ mod tests {
         Settings::default()
     }
 
-    #[test]
-    fn test_initial_screen_with_last_session() {
+    /// Create a temp settings with a config.toml so setup wizard doesn't trigger.
+    fn tmp_settings_with_config() -> (tempfile::TempDir, Settings) {
         let tmp = tempfile::TempDir::new().unwrap();
         let settings = Settings {
             paths: nomadflow_core::config::PathsConfig {
@@ -759,6 +969,30 @@ mod tests {
             ..Default::default()
         };
         settings.ensure_directories().unwrap();
+        // Create config.toml so setup screen is skipped
+        std::fs::write(settings.config_file(), "").unwrap();
+        (tmp, settings)
+    }
+
+    #[test]
+    fn test_initial_screen_setup_when_no_config() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let settings = Settings {
+            paths: nomadflow_core::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        settings.ensure_directories().unwrap();
+        // No config.toml → setup screen
+        let app = App::new(settings);
+        assert_eq!(app.screen, Screen::Setup);
+        assert!(!app.setup_secret.is_empty());
+    }
+
+    #[test]
+    fn test_initial_screen_with_last_session() {
+        let (_tmp, settings) = tmp_settings_with_config();
 
         // Save a state with last session
         let state = CliState {
@@ -775,14 +1009,7 @@ mod tests {
 
     #[test]
     fn test_initial_screen_without_last_session() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let settings = Settings {
-            paths: nomadflow_core::config::PathsConfig {
-                base_dir: tmp.path().to_string_lossy().to_string(),
-            },
-            ..Default::default()
-        };
-        settings.ensure_directories().unwrap();
+        let (_tmp, settings) = tmp_settings_with_config();
 
         let app = App::new(settings);
         assert_eq!(app.screen, Screen::ServerPicker);
