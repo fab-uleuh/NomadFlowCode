@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{NomadError, Result};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PathsConfig {
     pub base_dir: String,
@@ -18,7 +18,7 @@ impl Default for PathsConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TmuxConfig {
     pub session: String,
@@ -32,7 +32,7 @@ impl Default for TmuxConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TtydConfig {
     pub port: u16,
@@ -44,7 +44,7 @@ impl Default for TtydConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ApiConfig {
     pub port: u16,
@@ -60,13 +60,13 @@ impl Default for ApiConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AuthConfig {
     pub secret: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TunnelConfig {
     pub relay_host: String,
@@ -89,7 +89,7 @@ impl Default for TunnelConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub paths: PathsConfig,
@@ -126,11 +126,26 @@ impl Settings {
         self.base_dir().join("worktrees")
     }
 
+    /// Default config file path (static, always the default location).
+    pub fn config_path() -> PathBuf {
+        Self::expand_home("~/.nomadflowcode/config.toml")
+    }
+
+    /// Check whether the default config file exists on disk.
+    pub fn config_exists() -> bool {
+        Self::config_path().exists()
+    }
+
+    /// Config file path for this instance (relative to base_dir).
+    pub fn config_file(&self) -> PathBuf {
+        self.base_dir().join("config.toml")
+    }
+
     /// Load settings from the TOML config file.
     pub fn load(config_path: Option<&PathBuf>) -> Result<Self> {
         let path = match config_path {
             Some(p) => p.clone(),
-            None => Self::expand_home("~/.nomadflowcode/config.toml"),
+            None => Self::config_path(),
         };
 
         if path.exists() {
@@ -142,6 +157,20 @@ impl Settings {
         } else {
             Ok(Settings::default())
         }
+    }
+
+    /// Save the current settings to the TOML config file.
+    pub fn save(&self) -> Result<()> {
+        let path = self.config_file();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| NomadError::Config(format!("Failed to create config dir: {e}")))?;
+        }
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| NomadError::Config(format!("Failed to serialize config: {e}")))?;
+        std::fs::write(&path, content)
+            .map_err(|e| NomadError::Config(format!("Failed to write config: {e}")))?;
+        Ok(())
     }
 
     /// Create necessary directories if they don't exist.
@@ -208,6 +237,37 @@ secret = "s3cret"
     fn test_invalid_toml() {
         let result = toml::from_str::<Settings>("{{invalid");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_and_load_round_trip() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join("config.toml");
+
+        let settings = Settings {
+            paths: PathsConfig {
+                base_dir: "/tmp/rt-test".to_string(),
+            },
+            auth: super::AuthConfig {
+                secret: "my-password".to_string(),
+            },
+            tunnel: super::TunnelConfig {
+                subdomain: "my-laptop".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Save
+        let content = toml::to_string_pretty(&settings).unwrap();
+        std::fs::write(&config_path, &content).unwrap();
+
+        // Load back
+        let loaded = Settings::load(Some(&config_path)).unwrap();
+        assert_eq!(loaded.paths.base_dir, "/tmp/rt-test");
+        assert_eq!(loaded.auth.secret, "my-password");
+        assert_eq!(loaded.tunnel.subdomain, "my-laptop");
+        assert_eq!(loaded.api.port, 8080); // default preserved
     }
 
     #[test]
