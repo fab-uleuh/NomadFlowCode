@@ -19,3 +19,7 @@ build/
 # Rust
 target/
 **/*.rs.bk
+
+# Build artifacts
+*.apk
+*.aab
