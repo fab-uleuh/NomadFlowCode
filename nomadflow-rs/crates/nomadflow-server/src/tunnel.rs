@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use nomadflow_core::config::TunnelConfig;
 
@@ -82,6 +82,26 @@ pub async fn start_tunnel(
         })
         .send()
         .await?;
+
+    let resp = if resp.status() == reqwest::StatusCode::CONFLICT && !config.subdomain.is_empty() {
+        warn!(
+            subdomain = %config.subdomain,
+            "Subdomain is taken by another user, retrying with random…"
+        );
+        // Retry without subdomain — let the relay assign a random one
+        http_client
+            .post(&relay_url)
+            .timeout(Duration::from_secs(10))
+            .json(&RegisterRequest {
+                port: remote_port,
+                secret: config.relay_secret.clone(),
+                subdomain: None,
+            })
+            .send()
+            .await?
+    } else {
+        resp
+    };
 
     if !resp.status().is_success() {
         let status = resp.status();

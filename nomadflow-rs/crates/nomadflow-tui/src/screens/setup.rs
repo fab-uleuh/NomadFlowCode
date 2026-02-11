@@ -109,46 +109,47 @@ fn render_public_choice(frame: &mut Frame, area: Rect, _app: &App) {
     frame.render_widget(hint, chunks[2]);
 }
 
-/// Step 3: Subdomain input (only if public=y)
+/// Step 3: Fixed subdomain? y/n (only if public=y)
 fn render_subdomain_input(frame: &mut Frame, area: Rect, app: &App) {
+    let base_domain = app
+        .settings
+        .tunnel
+        .relay_host
+        .strip_prefix("relay.")
+        .unwrap_or(&app.settings.tunnel.relay_host);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(2),
             Constraint::Length(1),
             Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Length(1),
         ])
         .split(area);
 
-    let title = Paragraph::new("Fixed tunnel subdomain:").style(Style::default().bold());
+    let title = Paragraph::new("Use a fixed subdomain for a stable public URL? (y/n)")
+        .style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
-    let label = "Subdomain: ";
-    let input_display = if app.input_text.is_empty() {
-        Line::from(vec![
-            Span::raw(label),
-            Span::styled(
-                "(Enter to skip = random URL each time)",
-                Style::default().fg(Color::DarkGray),
-            ),
-        ])
-    } else {
-        Line::from(vec![
-            Span::raw(label),
-            Span::raw(&app.input_text),
-        ])
-    };
+    let sub_line = Paragraph::new(Line::from(vec![
+        Span::raw("  Your subdomain: "),
+        Span::styled(&app.setup_subdomain, Style::default().fg(Color::Cyan).bold()),
+    ]));
+    frame.render_widget(sub_line, chunks[1]);
 
-    let input = Paragraph::new(input_display);
-    frame.render_widget(input, chunks[1]);
+    let url_preview = format!(
+        "  -> https://{}.tunnel.{base_domain}",
+        app.setup_subdomain
+    );
+    let url_line =
+        Paragraph::new(url_preview).style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(url_line, chunks[2]);
 
-    let hint = Paragraph::new("Set a fixed name for a stable public URL (e.g. 'my-laptop')")
+    let hint = Paragraph::new("y: use this fixed subdomain  n: random URL each time")
         .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(hint, chunks[2]);
-
-    let cursor_x = chunks[1].x + label.len() as u16 + app.input_cursor as u16;
-    let cursor_y = chunks[1].y;
-    frame.set_cursor_position(Position::new(cursor_x, cursor_y));
+    frame.render_widget(hint, chunks[4]);
 }
 
 /// Step 4: Confirmation summary

@@ -386,6 +386,14 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::Serve { public }) => {
+            let settings = if !settings.config_file().exists() {
+                match nomadflow_tui::run_setup(settings)? {
+                    Some(s) => s,
+                    None => return Ok(()),
+                }
+            } else {
+                settings
+            };
             nomadflow_server::init_tracing();
             let shutdown = CancellationToken::new();
             nomadflow_server::spawn_signal_handler(shutdown.clone());

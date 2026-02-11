@@ -94,6 +94,17 @@ impl App {
             .collect()
     }
 
+    /// Generate a random subdomain (nf-XXXXXXXX, 8 lowercase alphanumeric chars).
+    fn generate_subdomain() -> String {
+        use rand::Rng;
+        const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+        let mut rng = rand::rng();
+        let suffix: String = (0..8)
+            .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
+            .collect();
+        format!("nf-{suffix}")
+    }
+
     pub fn new(settings: Settings) -> Self {
         let servers = state::load_servers(&settings);
         let cli_state = state::load_state(&settings);
@@ -119,9 +130,14 @@ impl App {
             None
         };
 
-        // Pre-generate a password for the setup wizard
+        // Pre-generate a password and subdomain for the setup wizard
         let setup_secret = if needs_setup {
             Self::generate_password()
+        } else {
+            String::new()
+        };
+        let setup_subdomain = if needs_setup {
+            Self::generate_subdomain()
         } else {
             String::new()
         };
@@ -149,7 +165,7 @@ impl App {
             server_add_url: String::new(),
             setup_step: 0,
             setup_secret,
-            setup_subdomain: String::new(),
+            setup_subdomain,
             setup_public: false,
             should_quit: false,
             attach_session: None,
@@ -587,37 +603,18 @@ impl App {
                 }
             }
             3 => {
-                // Subdomain input
+                // Fixed subdomain? y/n (subdomain is pre-generated)
                 match code {
-                    KeyCode::Char(c) => {
-                        self.input_text.insert(self.input_cursor, c);
-                        self.input_cursor += 1;
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        // Keep the pre-generated subdomain
+                        self.setup_step = 4;
                     }
-                    KeyCode::Backspace => {
-                        if self.input_cursor > 0 {
-                            self.input_cursor -= 1;
-                            self.input_text.remove(self.input_cursor);
-                        }
-                    }
-                    KeyCode::Left => {
-                        if self.input_cursor > 0 {
-                            self.input_cursor -= 1;
-                        }
-                    }
-                    KeyCode::Right => {
-                        if self.input_cursor < self.input_text.len() {
-                            self.input_cursor += 1;
-                        }
-                    }
-                    KeyCode::Enter => {
-                        self.setup_subdomain = self.input_text.trim().to_string();
-                        self.input_text.clear();
-                        self.input_cursor = 0;
+                    KeyCode::Char('n') | KeyCode::Char('N') => {
+                        // No fixed subdomain → random each time
+                        self.setup_subdomain.clear();
                         self.setup_step = 4;
                     }
                     KeyCode::Esc => {
-                        self.input_text.clear();
-                        self.input_cursor = 0;
                         self.setup_step = 2;
                     }
                     _ => {}
@@ -634,14 +631,16 @@ impl App {
                         self.setup_step = 0;
                         self.selected_index = 0;
                         self.setup_secret = Self::generate_password();
-                        self.setup_subdomain.clear();
+                        self.setup_subdomain = Self::generate_subdomain();
                         self.setup_public = false;
                     }
                     KeyCode::Esc => {
                         if self.setup_public {
+                            // Regenerate if user had previously said "no" (cleared it)
+                            if self.setup_subdomain.is_empty() {
+                                self.setup_subdomain = Self::generate_subdomain();
+                            }
                             self.setup_step = 3;
-                            self.input_text = self.setup_subdomain.clone();
-                            self.input_cursor = self.input_text.len();
                         } else {
                             self.setup_step = 2;
                         }
@@ -650,6 +649,35 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Run only the setup wizard loop (for `nomadflow serve` first-run).
+    /// Returns `true` if setup completed, `false` if cancelled.
+    pub fn run_setup_loop(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<bool> {
+        loop {
+            terminal.draw(|f| self.draw(f))?;
+
+            if crossterm::event::poll(Duration::from_millis(50))? {
+                if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
+                    if key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
+                        return Ok(false);
+                    }
+                    self.handle_setup_key(key.code);
+                }
+            }
+
+            if self.screen != Screen::Setup {
+                return Ok(true);
+            }
+            if self.should_quit {
+                return Ok(false);
+            }
         }
     }
 
