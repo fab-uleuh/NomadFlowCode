@@ -26,6 +26,9 @@ enum Commands {
         /// Expose the server publicly via tunnel
         #[arg(long)]
         public: bool,
+        /// Override the displayed address (IP or domain name) for QR code and URL
+        #[arg(long)]
+        host: Option<String>,
     },
     /// Start the server as a background daemon
     Start,
@@ -385,7 +388,7 @@ async fn main() -> Result<()> {
     settings.ensure_directories()?;
 
     match cli.command {
-        Some(Commands::Serve { public }) => {
+        Some(Commands::Serve { public, host }) => {
             let settings = if !settings.config_file().exists() {
                 match nomadflow_tui::run_setup(settings)? {
                     Some(s) => s,
@@ -397,7 +400,7 @@ async fn main() -> Result<()> {
             nomadflow_server::init_tracing();
             let shutdown = CancellationToken::new();
             nomadflow_server::spawn_signal_handler(shutdown.clone());
-            nomadflow_server::serve(settings, shutdown, public, false).await?;
+            nomadflow_server::serve(settings, shutdown, public, false, host).await?;
         }
         Some(Commands::Start) => {
             start_daemon(&settings)?;
@@ -424,7 +427,7 @@ async fn main() -> Result<()> {
             let shutdown = CancellationToken::new();
             let shutdown_clone = shutdown.clone();
             let server_handle = tokio::spawn(async move {
-                nomadflow_server::serve(server_settings, shutdown_clone, false, true)
+                nomadflow_server::serve(server_settings, shutdown_clone, false, true, None)
                     .await
                     .ok();
             });

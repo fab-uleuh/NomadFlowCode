@@ -80,6 +80,28 @@ pub fn spawn_signal_handler(shutdown: CancellationToken) {
     });
 }
 
+/// Build the connect URL from a host override or local IP detection.
+/// - IP address → `http://{ip}:{port}`
+/// - Domain name → `https://{domain}` (sans port, on suppose reverse proxy + TLS)
+/// - None → détecte l'IP locale → `http://{ip}:{port}`
+fn build_connect_url(host_override: &Option<String>, port: u16) -> String {
+    match host_override {
+        Some(h) => {
+            if h.parse::<std::net::IpAddr>().is_ok() {
+                format!("http://{}:{}", h, port)
+            } else {
+                format!("https://{}", h)
+            }
+        }
+        None => {
+            let local_ip = local_ip_address::local_ip()
+                .map(|ip| ip.to_string())
+                .unwrap_or_else(|_| "127.0.0.1".to_string());
+            format!("http://{}:{}", local_ip, port)
+        }
+    }
+}
+
 /// Run the HTTP server (with tmux session setup and ttyd startup).
 /// The server shuts down gracefully when `shutdown` is cancelled.
 /// When `public` is true, a bore tunnel is started and the server is exposed via the relay.
@@ -89,6 +111,7 @@ pub async fn serve(
     shutdown: CancellationToken,
     public: bool,
     quiet: bool,
+    host_override: Option<String>,
 ) -> color_eyre::Result<()> {
     // 0. Auto-generate a secret if --public and none configured
     if public && settings.auth.secret.is_empty() {
@@ -138,17 +161,11 @@ pub async fn serve(
             Ok(info) => info.public_url,
             Err(e) => {
                 tracing::warn!("Tunnel failed: {e}");
-                let local_ip = local_ip_address::local_ip()
-                    .map(|ip| ip.to_string())
-                    .unwrap_or_else(|_| "127.0.0.1".to_string());
-                format!("http://{local_ip}:{}", settings.api.port)
+                build_connect_url(&host_override, settings.api.port)
             }
         }
     } else {
-        let local_ip = local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
-        format!("http://{local_ip}:{}", settings.api.port)
+        build_connect_url(&host_override, settings.api.port)
     };
 
     // 5. Display connection info with QR code (only in foreground serve mode)
@@ -166,4 +183,60 @@ pub async fn serve(
     info!("Server stopped");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_connect_url_with_ipv4() {
+        let host = Some("192.168.1.42".to_string());
+        assert_eq!(build_connect_url(&host, 8080), "http://192.168.1.42:8080");
+    }
+
+    #[test]
+    fn test_build_connect_url_with_ipv6() {
+        let host = Some("::1".to_string());
+        assert_eq!(build_connect_url(&host, 3000), "http://::1:3000");
+    }
+
+    #[test]
+    fn test_build_connect_url_with_domain() {
+        let host = Some("myserver.example.com".to_string());
+        assert_eq!(
+            build_connect_url(&host, 8080),
+            "https://myserver.example.com"
+        );
+    }
+
+    #[test]
+    fn test_build_connect_url_with_subdomain() {
+        let host = Some("dev.internal.company.io".to_string());
+        assert_eq!(
+            build_connect_url(&host, 9090),
+            "https://dev.internal.company.io"
+        );
+    }
+
+    #[test]
+    fn test_build_connect_url_none_falls_back_to_local_ip() {
+        let url = build_connect_url(&None, 8080);
+        assert!(url.starts_with("http://"));
+        assert!(url.ends_with(":8080"));
+    }
+
+    #[test]
+    fn test_build_connect_url_domain_ignores_port() {
+        let host = Some("example.com".to_string());
+        let url = build_connect_url(&host, 9999);
+        assert!(!url.contains("9999"));
+        assert_eq!(url, "https://example.com");
+    }
+
+    #[test]
+    fn test_build_connect_url_localhost_ip() {
+        let host = Some("127.0.0.1".to_string());
+        assert_eq!(build_connect_url(&host, 4000), "http://127.0.0.1:4000");
+    }
 }
