@@ -25,6 +25,6 @@ target/
 *.aab
 
 # BMAD method (tracked in private repo)
-_bmad/
-_bmad-output/
+_bmad
+_bmad-output
 .claude/commands/bmad-*
