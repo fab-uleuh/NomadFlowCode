@@ -23,3 +23,8 @@ target/
 # Build artifacts
 *.apk
 *.aab
+
+# BMAD method (tracked in private repo)
+_bmad/
+_bmad-output/
+.claude/commands/bmad-*
