@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FlatList,
   Pressable,
@@ -32,18 +33,21 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 
 type ModalTab = 'new' | 'existing';
 
 export default function FeaturesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { height: screenHeight } = useWindowDimensions();
   const params = useLocalSearchParams<{ serverId: string; repoPath: string }>();
   const { getServer, addRecentFeature, saveLastSelection, lastSelection } = useStorage();
 
   const server = getServer(params.serverId);
   const repoPath = params.repoPath;
-  const repoName = repoPath?.split('/').pop() || 'Repository';
+  const repoName = repoPath?.split('/').pop() || t('repos.fallback_name');
 
   const [features, setFeatures] = useState<Feature[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,10 +96,10 @@ export default function FeaturesScreen() {
       if (result.success && result.data) {
         setFeatures(result.data.features);
       } else {
-        throw new Error(result.error || 'Failed to load features');
+        throw new Error(result.error || t('features.error.load_failed'));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      const message = err instanceof Error ? err.message : t('common.error.unknown');
       setError(message);
     } finally {
       setIsLoading(false);
@@ -195,6 +199,7 @@ export default function FeaturesScreen() {
     };
 
     addRecentFeature(newFeature);
+    saveLastSelection({ serverId: server.id, repoPath, featureName });
     router.push({
       pathname: '/terminal',
       params: {
@@ -210,7 +215,7 @@ export default function FeaturesScreen() {
 
     const trimmedName = branchName.trim();
     if (!trimmedName) {
-      Alert.alert('Erreur', 'Veuillez entrer un nom de branche');
+      Alert.alert(t('common.error'), t('features.create.error.branch_name_required'));
       return;
     }
 
@@ -221,7 +226,7 @@ export default function FeaturesScreen() {
       .replace(/^-|-$/g, '');
 
     if (!sanitizedName) {
-      Alert.alert('Erreur', 'Nom de branche invalide');
+      Alert.alert(t('common.error'), t('features.create.error.invalid_branch_name'));
       return;
     }
 
@@ -243,11 +248,11 @@ export default function FeaturesScreen() {
         const featureName = result.data.worktreePath.split('/').pop() || sanitizedName;
         navigateToTerminal(featureName, result.data.worktreePath, result.data.branch);
       } else {
-        throw new Error(result.error || 'Failed to create branch');
+        throw new Error(result.error || t('features.create.error.creation_failed'));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de la creation';
-      Alert.alert('Erreur', message);
+      const message = err instanceof Error ? err.message : t('features.create.error.creation_failed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setIsCreating(false);
     }
@@ -272,11 +277,11 @@ export default function FeaturesScreen() {
         const featureName = result.data.worktreePath.split('/').pop() || selectedBranch;
         navigateToTerminal(featureName, result.data.worktreePath, result.data.branch);
       } else {
-        throw new Error(result.error || 'Failed to attach branch');
+        throw new Error(result.error || t('features.create.error.attachment_failed'));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de l\'attachement';
-      Alert.alert('Erreur', message);
+      const message = err instanceof Error ? err.message : t('features.create.error.attachment_failed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setIsCreating(false);
     }
@@ -287,12 +292,12 @@ export default function FeaturesScreen() {
     if (feature.isMain) return;
 
     Alert.alert(
-      'Supprimer la feature ?',
-      `Etes-vous sur de vouloir supprimer "${feature.name}" ?\n\nCela supprimera le worktree et la window tmux associee.`,
+      t('features.delete.confirm_title'),
+      t('features.delete.confirm_message', { name: feature.name }),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -302,7 +307,7 @@ export default function FeaturesScreen() {
               });
               loadFeatures();
             } catch {
-              Alert.alert('Erreur', 'Impossible de supprimer la feature');
+              Alert.alert(t('common.error'), t('features.delete.error'));
             }
           },
         },
@@ -361,20 +366,20 @@ export default function FeaturesScreen() {
                 {item.isMain && (
                   <View className="rounded-full bg-warning px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-white">
-                      Source
+                      {t('features.badge.source')}
                     </Text>
                   </View>
                 )}
                 {isLastUsed && !item.isMain && (
                   <View className="rounded-full bg-primary px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-primary-foreground">
-                      Dernier
+                      {t('features.badge.last_used')}
                     </Text>
                   </View>
                 )}
                 {item.isActive && !isLastUsed && !item.isMain && (
                   <View className="rounded-full bg-success px-2 py-0.5">
-                    <Text className="text-[10px] font-semibold text-white">Actif</Text>
+                    <Text className="text-[10px] font-semibold text-white">{t('features.badge.active')}</Text>
                   </View>
                 )}
               </View>
@@ -415,7 +420,7 @@ export default function FeaturesScreen() {
             className={`text-[10px] font-semibold ${
               item.isRemote ? 'text-blue-600' : 'text-green-600'
             }`}>
-            {item.isRemote ? item.remoteName || 'remote' : 'local'}
+            {item.isRemote ? item.remoteName || t('features.branch_badge.remote') : t('features.branch_badge.local')}
           </Text>
         </View>
       </Pressable>
@@ -430,12 +435,12 @@ export default function FeaturesScreen() {
             <Icon as={AlertCircleIcon} className="text-destructive" size={40} />
           </View>
           <Text className="mb-2 text-center text-xl font-bold text-destructive">
-            Erreur de chargement
+            {t('features.error.loading_title')}
           </Text>
           <Text className="mb-6 text-center text-muted-foreground">{error}</Text>
           <Button onPress={() => loadFeatures()}>
             <Icon as={RefreshCwIcon} className="mr-2" size={18} />
-            <Text>Reessayer</Text>
+            <Text>{t('common.retry')}</Text>
           </Button>
         </>
       ) : (
@@ -443,9 +448,9 @@ export default function FeaturesScreen() {
           <View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-primary/10">
             <Icon as={LeafIcon} className="text-primary" size={40} />
           </View>
-          <Text className="mb-2 text-center text-xl font-bold">Aucune feature active</Text>
+          <Text className="mb-2 text-center text-xl font-bold">{t('features.empty.title')}</Text>
           <Text className="text-center text-muted-foreground">
-            Creez une nouvelle feature pour commencer a developper
+            {t('features.empty.description')}
           </Text>
         </>
       )}
@@ -455,7 +460,7 @@ export default function FeaturesScreen() {
   if (!server) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <Text className="text-destructive">Serveur non trouve</Text>
+        <Text className="text-destructive">{t('common.error.server_not_found')}</Text>
       </View>
     );
   }
@@ -464,7 +469,7 @@ export default function FeaturesScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" />
-        <Text className="mt-4 text-muted-foreground">Chargement des features...</Text>
+        <Text className="mt-4 text-muted-foreground">{t('features.loading')}</Text>
       </View>
     );
   }
@@ -510,10 +515,10 @@ export default function FeaturesScreen() {
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             className="flex-1 justify-end bg-black/70">
-            <Card className="w-full" style={{ flex: 1, marginTop: '15%', overflow: 'hidden' }}>
+            <Card className="w-full" style={{ maxHeight: screenHeight * 0.85, overflow: 'hidden' }}>
               {/* Header */}
               <CardHeader className="flex-row items-center justify-between pb-2">
-                <CardTitle>Ajouter une branche</CardTitle>
+                <CardTitle>{t('features.create.title')}</CardTitle>
                 <Pressable onPress={closeModal}>
                   <Icon as={XIcon} className="text-muted-foreground" size={20} />
                 </Pressable>
@@ -530,7 +535,7 @@ export default function FeaturesScreen() {
                     className={`text-sm font-medium ${
                       activeTab === 'new' ? 'text-foreground' : 'text-muted-foreground'
                     }`}>
-                    Nouvelle branche
+                    {t('features.modal.tab.new')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -542,7 +547,7 @@ export default function FeaturesScreen() {
                     className={`text-sm font-medium ${
                       activeTab === 'existing' ? 'text-foreground' : 'text-muted-foreground'
                     }`}>
-                    Branche existante
+                    {t('features.modal.tab.existing')}
                   </Text>
                 </Pressable>
               </View>
@@ -551,9 +556,9 @@ export default function FeaturesScreen() {
               {activeTab === 'new' ? (
                 <View className="flex-1 px-4 pb-4" style={{ overflow: 'hidden' }}>
                   <View className="mb-3 gap-2">
-                    <Label nativeID="branchName">Nom de la branche</Label>
+                    <Label nativeID="branchName">{t('features.modal.label.branch_name')}</Label>
                     <Input
-                      placeholder="feature/ma-feature"
+                      placeholder={t('features.modal.placeholder.branch_name')}
                       value={branchName}
                       onChangeText={setBranchName}
                       autoCapitalize="none"
@@ -563,9 +568,9 @@ export default function FeaturesScreen() {
                     />
                   </View>
 
-                  <Label className="mb-2">Branche source</Label>
+                  <Label className="mb-2">{t('features.modal.label.base_branch')}</Label>
                   <Input
-                    placeholder="Filtrer..."
+                    placeholder={t('common.filter')}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     autoCapitalize="none"
@@ -601,7 +606,7 @@ export default function FeaturesScreen() {
                                 className={`text-[10px] font-semibold ${
                                   item.isRemote ? 'text-blue-600' : 'text-green-600'
                                 }`}>
-                                {item.isRemote ? item.remoteName || 'remote' : 'local'}
+                                {item.isRemote ? item.remoteName || t('features.branch_badge.remote') : t('features.branch_badge.local')}
                               </Text>
                             </View>
                           </Pressable>
@@ -612,13 +617,13 @@ export default function FeaturesScreen() {
 
                   <View className="flex-row gap-3 pt-3">
                     <Button variant="outline" className="flex-1" onPress={closeModal}>
-                      <Text>Annuler</Text>
+                      <Text>{t('common.cancel')}</Text>
                     </Button>
                     <Button className="flex-1" onPress={createNewBranch} disabled={isCreating}>
                       {isCreating ? (
                         <ActivityIndicator size="small" color="white" />
                       ) : (
-                        <Text>Creer</Text>
+                        <Text>{t('common.create')}</Text>
                       )}
                     </Button>
                   </View>
@@ -626,7 +631,7 @@ export default function FeaturesScreen() {
               ) : (
                 <View className="flex-1 px-4 pb-4" style={{ overflow: 'hidden' }}>
                   <Input
-                    placeholder="Rechercher une branche..."
+                    placeholder={t('features.modal.search_placeholder')}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     autoCapitalize="none"
@@ -638,7 +643,7 @@ export default function FeaturesScreen() {
                     <View className="items-center justify-center py-8">
                       <ActivityIndicator size="small" />
                       <Text className="mt-2 text-sm text-muted-foreground">
-                        Chargement des branches...
+                        {t('features.modal.loading_branches')}
                       </Text>
                     </View>
                   ) : filteredBranches.length === 0 ? (
@@ -646,8 +651,8 @@ export default function FeaturesScreen() {
                       <Icon as={GitBranchIcon} className="text-muted-foreground" size={32} />
                       <Text className="mt-2 text-center text-sm text-muted-foreground">
                         {searchQuery
-                          ? 'Aucune branche correspondante'
-                          : 'Toutes les branches ont deja un worktree'}
+                          ? t('features.modal.no_matching_branches')
+                          : t('features.modal.all_branches_have_worktrees')}
                       </Text>
                     </View>
                   ) : (
@@ -662,7 +667,7 @@ export default function FeaturesScreen() {
 
                   <View className="flex-row gap-3 pt-3">
                     <Button variant="outline" className="flex-1" onPress={closeModal}>
-                      <Text>Annuler</Text>
+                      <Text>{t('common.cancel')}</Text>
                     </Button>
                     <Button
                       className="flex-1"
@@ -673,7 +678,7 @@ export default function FeaturesScreen() {
                       ) : (
                         <>
                           <Icon as={LinkIcon} size={16} className="mr-1 text-primary-foreground" />
-                          <Text>Attacher</Text>
+                          <Text>{t('features.modal.attach')}</Text>
                         </>
                       )}
                     </Button>

@@ -1,15 +1,10 @@
-use nomadflow_core::models::{
-    Feature, ListFeaturesResponse, ListReposResponse, Repository,
-};
+use nomadflow_core::models::{Feature, ListFeaturesResponse, ListReposResponse, Repository};
 
 use crate::state::ServerConfig;
 
 /// Derive the API base URL from a server config.
 pub fn get_api_base_url(server: &ServerConfig) -> String {
-    let url = server
-        .api_url
-        .as_deref()
-        .unwrap_or("http://localhost:8080");
+    let url = server.api_url.as_deref().unwrap_or("http://localhost:8080");
     let base = url.trim_end_matches('/');
     if base.ends_with("/api") {
         base.to_string()
@@ -29,7 +24,10 @@ pub async fn check_health(server: &ServerConfig) -> bool {
         req = req.header("Authorization", format!("Bearer {token}"));
     }
 
-    req.send().await.map(|r| r.status().is_success()).unwrap_or(false)
+    req.send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
 /// List repos from the server.
@@ -57,10 +55,7 @@ pub async fn list_repos(server: &ServerConfig) -> Result<Vec<Repository>, String
 }
 
 /// List features for a repo.
-pub async fn list_features(
-    server: &ServerConfig,
-    repo_path: &str,
-) -> Result<Vec<Feature>, String> {
+pub async fn list_features(server: &ServerConfig, repo_path: &str) -> Result<Vec<Feature>, String> {
     let url = format!("{}/list-features", get_api_base_url(server));
 
     let client = reqwest::Client::new();

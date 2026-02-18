@@ -9,10 +9,17 @@ use clap::{Parser, Subcommand};
 use color_eyre::{eyre::eyre, Result};
 use tokio_util::sync::CancellationToken;
 
+use nomadflow_core::agent_state::AgentStateService;
 use nomadflow_core::config::Settings;
+use nomadflow_core::services::git::GitService;
+use nomadflow_core::services::tmux::{session_window_name, TmuxService};
 
 #[derive(Parser)]
-#[command(name = "nomadflow", version, about = "NomadFlow - Git worktree + tmux workflow manager")]
+#[command(
+    name = "nomadflow",
+    version,
+    about = "NomadFlow - Git worktree + tmux workflow manager"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -32,6 +39,9 @@ enum Commands {
         /// Override the displayed address (IP or domain name) for QR code and URL
         #[arg(long)]
         host: Option<String>,
+        /// Override the API server port (default: from config.toml)
+        #[arg(long)]
+        port: Option<u16>,
     },
     /// Start the server as a background daemon
     Start,
@@ -49,6 +59,18 @@ enum Commands {
     Unlink {
         /// Name of the linked repository to remove
         name: Option<String>,
+    },
+    /// Open the web dashboard in a browser
+    Web {
+        /// Override the dashboard port (default: from config.toml)
+        #[arg(long)]
+        port: Option<u16>,
+    },
+    /// Create a managed terminal session in the current worktree
+    Run {
+        /// Agent type for state detection (claude-code uses hooks, generic uses process monitoring)
+        #[arg(long, default_value = "generic", value_parser = ["generic", "claude-code"])]
+        agent_type: String,
     },
     /// Attach to an existing tmux window (no server needed)
     Attach {
@@ -153,15 +175,15 @@ async fn main() -> Result<()> {
         Some(Commands::Serve { .. }) | Some(Commands::Start) | None if !cli.status => {
             ensure_dependencies(&["tmux", "ttyd"]).await;
         }
-        Some(Commands::Attach { .. }) => {
+        Some(Commands::Attach { .. }) | Some(Commands::Run { .. }) => {
             ensure_dependencies(&["tmux"]).await;
         }
         _ => {}
     }
 
     match cli.command {
-        Some(Commands::Serve { public, host }) => {
-            let settings = if !settings.config_file().exists() {
+        Some(Commands::Serve { public, host, port }) => {
+            let mut settings = if !settings.config_file().exists() {
                 match nomadflow_tui::run_setup(settings)? {
                     Some(s) => s,
                     None => return Ok(()),
@@ -169,6 +191,9 @@ async fn main() -> Result<()> {
             } else {
                 settings
             };
+            if let Some(p) = port {
+                settings.api.port = p;
+            }
             nomadflow_server::init_tracing();
             let shutdown = CancellationToken::new();
             nomadflow_server::spawn_signal_handler(shutdown.clone());
@@ -185,6 +210,92 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Unlink { name }) => {
             repo::unlink_repo(&settings, name.as_deref())?;
+        }
+        Some(Commands::Web { port }) => {
+            let mut settings = settings;
+            if let Some(p) = port {
+                settings.web.port = p;
+            }
+            nomadflow_server::init_tracing();
+            let shutdown = CancellationToken::new();
+            nomadflow_server::spawn_signal_handler(shutdown.clone());
+            nomadflow_server::serve_web(&settings, shutdown).await?;
+        }
+        Some(Commands::Run { agent_type }) => {
+            let cwd = std::env::current_dir()
+                .map_err(|e| eyre!("Failed to get current directory: {e}"))?;
+
+            let git = GitService::new(&settings);
+            let info = git
+                .detect_current_worktree(&cwd)
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            let tmux = TmuxService::new(&settings.tmux.session);
+            tmux.ensure_session()
+                .await
+                .map_err(|e| eyre!("Failed to create tmux session: {e}"))?;
+
+            let n = tmux
+                .next_agent_number(&info.repo_name, &info.worktree_name)
+                .await
+                .map_err(|e| eyre!("Failed to determine agent number: {e}"))?;
+
+            let window = session_window_name(&info.repo_name, &info.worktree_name, &agent_type, n);
+            let session_id = window.replace(':', "-");
+
+            // Set up agent state tracking hooks (only for claude-code)
+            let agent_state = AgentStateService::new(&settings);
+            let worktree_path = PathBuf::from(&info.worktree_path);
+
+            if agent_type == "claude-code" {
+                agent_state
+                    .ensure_hook_scripts()
+                    .await
+                    .map_err(|e| eyre!("Failed to install hook scripts: {e}"))?;
+                agent_state
+                    .inject_hooks(&worktree_path, &session_id)
+                    .await
+                    .map_err(|e| eyre!("Failed to inject hooks: {e}"))?;
+            }
+
+            tmux.create_window(&window, Some(&info.worktree_path))
+                .await
+                .map_err(|e| eyre!("Failed to create tmux window: {e}"))?;
+
+            // Set env vars in the tmux window regardless of agent type
+            let state_dir = settings.sessions_dir().join(&session_id);
+            let env_ok = tmux
+                .send_keys(
+                    &window,
+                    &format!(
+                        "export NOMADFLOW_SESSION_ID='{}' NOMADFLOW_STATE_DIR='{}'",
+                        session_id,
+                        state_dir.display()
+                    ),
+                    true,
+                )
+                .await;
+            if !env_ok {
+                eprintln!("Warning: Failed to set environment variables in tmux window");
+            }
+
+            println!("Session created: {window}");
+
+            // Attach to the session, selecting the new window
+            let session = tmux.session_name();
+            let target = format!("{session}:{window}");
+            std::process::Command::new("tmux")
+                .args(["attach-session", "-t", &target])
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+
+            // Cleanup hooks if the window was closed (only for claude-code)
+            if agent_type == "claude-code" && !tmux.window_exists(&window).await {
+                agent_state.cleanup_hooks(&worktree_path).await.ok();
+            }
         }
         Some(Commands::Attach { window }) => {
             attach_local(&settings, window)?;
@@ -227,4 +338,49 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_agent_type_defaults_to_generic() {
+        let cli = Cli::try_parse_from(["nomadflow", "run"]).unwrap();
+        match cli.command {
+            Some(Commands::Run { agent_type }) => {
+                assert_eq!(agent_type, "generic");
+            }
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_agent_type_accepts_claude_code() {
+        let cli = Cli::try_parse_from(["nomadflow", "run", "--agent-type", "claude-code"]).unwrap();
+        match cli.command {
+            Some(Commands::Run { agent_type }) => {
+                assert_eq!(agent_type, "claude-code");
+            }
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_agent_type_accepts_generic() {
+        let cli = Cli::try_parse_from(["nomadflow", "run", "--agent-type", "generic"]).unwrap();
+        match cli.command {
+            Some(Commands::Run { agent_type }) => {
+                assert_eq!(agent_type, "generic");
+            }
+            _ => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn test_agent_type_rejects_invalid_value() {
+        let result = Cli::try_parse_from(["nomadflow", "run", "--agent-type", "invalid"]);
+        assert!(result.is_err(), "Should reject invalid agent type values");
+    }
 }

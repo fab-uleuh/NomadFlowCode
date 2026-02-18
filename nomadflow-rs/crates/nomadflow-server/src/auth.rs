@@ -31,9 +31,7 @@ pub async fn auth_middleware(
         .and_then(|v| v.to_str().ok());
 
     let authenticated = match auth_header {
-        Some(h) if h.starts_with("Bearer ") => {
-            h.as_bytes()[7..].ct_eq(secret.as_bytes()).into()
-        }
+        Some(h) if h.starts_with("Bearer ") => h.as_bytes()[7..].ct_eq(secret.as_bytes()).into(),
         Some(h) if h.starts_with("Basic ") => {
             // Decode Basic Auth and check password matches secret
             base64::engine::general_purpose::STANDARD

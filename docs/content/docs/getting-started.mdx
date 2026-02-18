@@ -35,6 +35,8 @@ cp target/release/nomadflow ~/.local/bin/
 NomadFlowCode works with sensible defaults. To customize, create `~/.nomadflowcode/config.toml`:
 
 ```toml
+version = 1
+
 [paths]
 base_dir = "~/.nomadflowcode"
 
@@ -47,6 +49,9 @@ port = 7681
 [api]
 port = 8080
 host = "0.0.0.0"
+
+[web]
+port = 3000
 
 [auth]
 secret = "your-secret-token"

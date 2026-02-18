@@ -18,11 +18,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Length(1)])
             .split(area);
-        let error = Paragraph::new(format!("Error: {err}"))
-            .style(Style::default().fg(Color::Red));
+        let error = Paragraph::new(format!("Error: {err}")).style(Style::default().fg(Color::Red));
         frame.render_widget(error, chunks[0]);
-        let hint = Paragraph::new("Press Escape to go back")
-            .style(Style::default().fg(Color::DarkGray));
+        let hint =
+            Paragraph::new("Press Escape to go back").style(Style::default().fg(Color::DarkGray));
         frame.render_widget(hint, chunks[1]);
         return;
     }
@@ -33,8 +32,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .constraints([Constraint::Length(2), Constraint::Min(1)])
         .split(area);
 
-    let title = Paragraph::new(format!("Select a feature ({repo_name}):"))
-        .style(Style::default().bold());
+    let title =
+        Paragraph::new(format!("Select a feature ({repo_name}):")).style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
     let mut items: Vec<ListItem> = app

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Settings;
 use crate::error::{NomadError, Result};
-use crate::models::{BranchInfo, Feature, Repository};
+use crate::models::{BranchInfo, Feature, Repository, WorktreeInfo};
 use crate::shell::{run, run_command};
 
 pub struct GitService {
@@ -32,7 +32,11 @@ impl GitService {
             if path.is_dir() && path.join(".git").exists() {
                 let branch = self.get_current_branch(&path).await;
                 repos.push(Repository {
-                    name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                    name: path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
                     path: path.to_string_lossy().to_string(),
                     branch,
                 });
@@ -40,6 +44,74 @@ impl GitService {
         }
 
         Ok(repos)
+    }
+
+    /// Detect which tracked repo/worktree contains the given directory.
+    ///
+    /// Canonicalizes all paths for reliable comparison (macOS /tmp → /private/tmp).
+    /// Returns `NomadError::NotFound` if not in any tracked directory.
+    pub async fn detect_current_worktree(&self, cwd: &Path) -> Result<WorktreeInfo> {
+        let canonical_cwd = std::fs::canonicalize(cwd).map_err(|e| {
+            NomadError::Other(format!(
+                "Cannot resolve current directory '{}': {e}",
+                cwd.display()
+            ))
+        })?;
+
+        let repos = self.list_repos().await?;
+
+        for repo in &repos {
+            let repo_path = PathBuf::from(&repo.path);
+            let canonical_repo =
+                std::fs::canonicalize(&repo_path).unwrap_or_else(|_| repo_path.clone());
+
+            // Check worktrees first (more specific match)
+            let features = self.list_features(&repo.path).await?;
+            let mut best_match: Option<WorktreeInfo> = None;
+            let mut best_len = 0;
+
+            for feature in &features {
+                let wt_path = PathBuf::from(&feature.worktree_path);
+                let canonical_wt =
+                    std::fs::canonicalize(&wt_path).unwrap_or_else(|_| wt_path.clone());
+
+                if canonical_cwd.starts_with(&canonical_wt) {
+                    let wt_len = canonical_wt.as_os_str().len();
+                    if wt_len > best_len {
+                        best_len = wt_len;
+                        let worktree_name = sanitize_name(&feature.name);
+                        best_match = Some(WorktreeInfo {
+                            repo_name: repo.name.clone(),
+                            repo_path: repo.path.clone(),
+                            worktree_name,
+                            worktree_path: feature.worktree_path.clone(),
+                        });
+                    }
+                }
+            }
+
+            if let Some(info) = best_match {
+                return Ok(info);
+            }
+
+            // Fallback: cwd is inside repo dir but no worktree matched
+            if canonical_cwd.starts_with(&canonical_repo) {
+                let worktree_name = sanitize_name(&repo.branch);
+                return Ok(WorktreeInfo {
+                    repo_name: repo.name.clone(),
+                    repo_path: repo.path.clone(),
+                    worktree_name,
+                    worktree_path: repo.path.clone(),
+                });
+            }
+        }
+
+        // Also check linked repos: repos whose path is outside repos_dir
+        // (already covered by list_repos which scans repos_dir symlinks)
+
+        Err(NomadError::NotFound(
+            "Not in a tracked worktree/repo — use `nomadflow link` or navigate to a tracked directory".to_string(),
+        ))
     }
 
     /// Clone a git repository into the repos directory.
@@ -88,12 +160,7 @@ impl GitService {
         };
 
         let dest_str = dest.to_string_lossy();
-        let result = run_command(
-            &format!("git clone {clone_url} {dest_str}"),
-            None,
-            600.0,
-        )
-        .await;
+        let result = run_command(&format!("git clone {clone_url} {dest_str}"), None, 600.0).await;
 
         if !result.success() {
             return Err(NomadError::CommandFailed(format!(
@@ -104,11 +171,7 @@ impl GitService {
 
         // Security: remove token from remote URL
         if token.is_some() {
-            run(
-                &format!("git remote set-url origin {url}"),
-                Some(&dest_str),
-            )
-            .await;
+            run(&format!("git remote set-url origin {url}"), Some(&dest_str)).await;
         }
 
         let branch = self.get_current_branch(&dest).await;
@@ -126,8 +189,8 @@ impl GitService {
             .to_string();
 
         // Canonicalize repo_path for reliable comparison with worktree paths
-        let canonical_repo = std::fs::canonicalize(repo_path)
-            .unwrap_or_else(|_| PathBuf::from(repo_path));
+        let canonical_repo =
+            std::fs::canonicalize(repo_path).unwrap_or_else(|_| PathBuf::from(repo_path));
 
         let result = run("git worktree list --porcelain", Some(repo_path)).await;
         if !result.success() {
@@ -148,8 +211,8 @@ impl GitService {
                         .unwrap_or(&branch)
                         .to_string();
 
-                    let canonical_wt = std::fs::canonicalize(&wt_path)
-                        .unwrap_or_else(|_| PathBuf::from(&wt_path));
+                    let canonical_wt =
+                        std::fs::canonicalize(&wt_path).unwrap_or_else(|_| PathBuf::from(&wt_path));
                     let is_main = canonical_wt == canonical_repo;
                     let name = if is_main {
                         if branch.is_empty() {
@@ -188,11 +251,15 @@ impl GitService {
                 .strip_prefix("refs/heads/")
                 .unwrap_or(&branch)
                 .to_string();
-            let canonical_wt = std::fs::canonicalize(&wt_path)
-                .unwrap_or_else(|_| PathBuf::from(&wt_path));
+            let canonical_wt =
+                std::fs::canonicalize(&wt_path).unwrap_or_else(|_| PathBuf::from(&wt_path));
             let is_main = canonical_wt == canonical_repo;
             let name = if is_main {
-                if branch.is_empty() { repo_name.clone() } else { branch.clone() }
+                if branch.is_empty() {
+                    repo_name.clone()
+                } else {
+                    branch.clone()
+                }
             } else {
                 Path::new(&wt_path)
                     .file_name()
@@ -221,7 +288,11 @@ impl GitService {
                 if path.is_dir() && !existing_paths.contains(&path.to_string_lossy().to_string()) {
                     let branch = self.get_current_branch(&path).await;
                     features.push(Feature {
-                        name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                        name: path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string(),
                         worktree_path: path.to_string_lossy().to_string(),
                         branch,
                         is_active: false,
@@ -245,20 +316,14 @@ impl GitService {
         if wt_result.success() {
             for line in wt_result.stdout.lines() {
                 if let Some(branch_ref) = line.trim().strip_prefix("branch ") {
-                    let branch = branch_ref
-                        .strip_prefix("refs/heads/")
-                        .unwrap_or(branch_ref);
+                    let branch = branch_ref.strip_prefix("refs/heads/").unwrap_or(branch_ref);
                     worktree_branches.insert(branch.to_string());
                 }
             }
         }
 
         // List local branches
-        let local_result = run(
-            "git branch --format=\"%(refname:short)\"",
-            Some(repo_path),
-        )
-        .await;
+        let local_result = run("git branch --format=\"%(refname:short)\"", Some(repo_path)).await;
         let mut local_names = std::collections::HashSet::new();
         let mut branches = Vec::new();
 
@@ -356,7 +421,10 @@ impl GitService {
             }
         }
 
-        Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()))
+        Ok((
+            worktree_path.to_string_lossy().to_string(),
+            branch_name.to_string(),
+        ))
     }
 
     /// Create a new feature worktree with a full branch name.
@@ -387,7 +455,10 @@ impl GitService {
 
         // If worktree already exists, just return
         if worktree_path.exists() {
-            return Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()));
+            return Ok((
+                worktree_path.to_string_lossy().to_string(),
+                branch_name.to_string(),
+            ));
         }
 
         // Fetch latest from remote (ignore errors)
@@ -436,15 +507,14 @@ impl GitService {
             }
         }
 
-        Ok((worktree_path.to_string_lossy().to_string(), branch_name.to_string()))
+        Ok((
+            worktree_path.to_string_lossy().to_string(),
+            branch_name.to_string(),
+        ))
     }
 
     /// Delete a feature worktree.
-    pub async fn delete_feature(
-        &self,
-        repo_path: &str,
-        feature_name: &str,
-    ) -> Result<bool> {
+    pub async fn delete_feature(&self, repo_path: &str, feature_name: &str) -> Result<bool> {
         let repo_path_obj = PathBuf::from(repo_path);
         let repo_name = repo_path_obj
             .file_name()
@@ -471,11 +541,7 @@ impl GitService {
 
         // Delete the branch
         let branch_name = format!("feature/{feature_name}");
-        run(
-            &format!("git branch -D \"{branch_name}\""),
-            Some(repo_path),
-        )
-        .await;
+        run(&format!("git branch -D \"{branch_name}\""), Some(repo_path)).await;
 
         Ok(true)
     }
@@ -552,10 +618,7 @@ pub fn sanitize_name(name: &str) -> String {
 /// - `bugfix/critical-fix` → `critical-fix`
 /// - `my-branch` → `my-branch`
 pub fn derive_worktree_name(branch_name: &str, worktrees_dir: &Path) -> String {
-    let base = branch_name
-        .rsplit('/')
-        .next()
-        .unwrap_or(branch_name);
+    let base = branch_name.rsplit('/').next().unwrap_or(branch_name);
 
     let base = sanitize_name(base);
 
@@ -598,24 +661,36 @@ mod tests {
         let dir = tmp.path();
 
         assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login");
-        assert_eq!(derive_worktree_name("bugfix/critical-fix", dir), "critical-fix");
+        assert_eq!(
+            derive_worktree_name("bugfix/critical-fix", dir),
+            "critical-fix"
+        );
         assert_eq!(derive_worktree_name("release/v2.0", dir), "v2.0");
         assert_eq!(derive_worktree_name("my-branch", dir), "my-branch");
 
         // Test collision: create "add-login" dir, next should be "add-login-2"
         std::fs::create_dir(dir.join("add-login")).unwrap();
-        assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login-2");
+        assert_eq!(
+            derive_worktree_name("feature/add-login", dir),
+            "add-login-2"
+        );
 
         // Another collision
         std::fs::create_dir(dir.join("add-login-2")).unwrap();
-        assert_eq!(derive_worktree_name("feature/add-login", dir), "add-login-3");
+        assert_eq!(
+            derive_worktree_name("feature/add-login", dir),
+            "add-login-3"
+        );
     }
 
     #[test]
     fn test_sanitize_name() {
         assert_eq!(sanitize_name("my repo@v2!"), "my-repo-v2-");
         assert_eq!(sanitize_name("normal-name"), "normal-name");
-        assert_eq!(sanitize_name("with.dots_and-dashes"), "with.dots_and-dashes");
+        assert_eq!(
+            sanitize_name("with.dots_and-dashes"),
+            "with.dots_and-dashes"
+        );
     }
 
     #[test]
@@ -687,6 +762,105 @@ mod tests {
     }
 
     use crate::config::Settings;
+
+    #[tokio::test]
+    async fn test_detect_current_worktree_in_repo() {
+        let tmp = TempDir::new().unwrap();
+        let settings = Settings {
+            paths: crate::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        settings.ensure_directories().unwrap();
+
+        // Create a git repo inside repos/
+        let repo_dir = settings.repos_dir().join("detect-repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        run("git init", Some(&repo_dir.to_string_lossy())).await;
+        run(
+            "git commit --allow-empty -m init",
+            Some(&repo_dir.to_string_lossy()),
+        )
+        .await;
+
+        let svc = GitService::new(&settings);
+
+        // Detect from repo root
+        let canonical_repo = std::fs::canonicalize(&repo_dir).unwrap();
+        let info = svc.detect_current_worktree(&canonical_repo).await.unwrap();
+        assert_eq!(info.repo_name, "detect-repo");
+
+        // Detect from subdirectory
+        let subdir = repo_dir.join("src");
+        std::fs::create_dir_all(&subdir).unwrap();
+        let canonical_sub = std::fs::canonicalize(&subdir).unwrap();
+        let info2 = svc.detect_current_worktree(&canonical_sub).await.unwrap();
+        assert_eq!(info2.repo_name, "detect-repo");
+    }
+
+    #[tokio::test]
+    async fn test_detect_current_worktree_not_tracked() {
+        let tmp = TempDir::new().unwrap();
+        let settings = Settings {
+            paths: crate::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        settings.ensure_directories().unwrap();
+
+        let svc = GitService::new(&settings);
+
+        // Some random directory
+        let random_dir = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&random_dir).unwrap();
+        let result = svc.detect_current_worktree(&random_dir).await;
+        assert!(result.is_err());
+        match result {
+            Err(NomadError::NotFound(msg)) => {
+                assert!(msg.contains("Not in a tracked worktree/repo"));
+            }
+            _ => panic!("Expected NotFound error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_detect_current_worktree_in_feature() {
+        let tmp = TempDir::new().unwrap();
+        let settings = Settings {
+            paths: crate::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        settings.ensure_directories().unwrap();
+
+        // Create a git repo
+        let repo_dir = settings.repos_dir().join("wt-repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        run("git init", Some(&repo_dir.to_string_lossy())).await;
+        run(
+            "git commit --allow-empty -m init",
+            Some(&repo_dir.to_string_lossy()),
+        )
+        .await;
+
+        let svc = GitService::new(&settings);
+        let repo_path = repo_dir.to_string_lossy().to_string();
+
+        // Create a feature worktree
+        let (wt_path, _) = svc
+            .create_feature(&repo_path, "feature/detect-test", None)
+            .await
+            .unwrap();
+
+        // Detect from worktree directory
+        let canonical_wt = std::fs::canonicalize(&wt_path).unwrap();
+        let info = svc.detect_current_worktree(&canonical_wt).await.unwrap();
+        assert_eq!(info.repo_name, "wt-repo");
+        assert_eq!(info.worktree_name, "detect-test");
+    }
 
     #[tokio::test]
     async fn test_create_and_list_features() {

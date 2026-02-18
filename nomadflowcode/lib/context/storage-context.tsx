@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 
 import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings, TerminalShortcut } from '../types';
@@ -178,52 +178,75 @@ export function StorageProvider({ children }: StorageProviderProps) {
     []
   );
 
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+
   const getServer = useCallback(
     (id: string): Server | undefined => {
-      return servers.find((s) => s.id === id);
+      return serversRef.current.find((s) => s.id === id);
     },
-    [servers]
+    []
   );
 
   const addRecentRepo = useCallback(
     async (repo: Repository): Promise<void> => {
       const updatedRepo = { ...repo, lastAccessed: Date.now() };
-      const filtered = recentRepos.filter((r) => r.path !== repo.path);
-      const updated = [updatedRepo, ...filtered].slice(0, 10);
-      setRecentRepos(updated);
+      const updated = await new Promise<Repository[]>((resolve) => {
+        setRecentRepos((prev) => {
+          const filtered = prev.filter((r) => r.path !== repo.path);
+          const next = [updatedRepo, ...filtered].slice(0, 10);
+          resolve(next);
+          return next;
+        });
+      });
       await AsyncStorage.setItem(STORAGE_KEYS.RECENT_REPOS, JSON.stringify(updated));
     },
-    [recentRepos]
+    []
   );
 
   const addRecentFeature = useCallback(
     async (feature: Feature): Promise<void> => {
-      const filtered = recentFeatures.filter(
-        (f) => !(f.name === feature.name && f.worktreePath === feature.worktreePath)
-      );
-      const updated = [feature, ...filtered].slice(0, 20);
-      setRecentFeatures(updated);
+      const updated = await new Promise<Feature[]>((resolve) => {
+        setRecentFeatures((prev) => {
+          const filtered = prev.filter(
+            (f) => !(f.name === feature.name && f.worktreePath === feature.worktreePath)
+          );
+          const next = [feature, ...filtered].slice(0, 20);
+          resolve(next);
+          return next;
+        });
+      });
       await AsyncStorage.setItem(STORAGE_KEYS.RECENT_FEATURES, JSON.stringify(updated));
     },
-    [recentFeatures]
+    []
   );
 
   const saveLastSelection = useCallback(
     async (selection: LastSelection): Promise<void> => {
-      const updated = { ...lastSelection, ...selection };
-      setLastSelection(updated);
+      const updated = await new Promise<LastSelection>((resolve) => {
+        setLastSelection((prev) => {
+          const next = { ...prev, ...selection };
+          resolve(next);
+          return next;
+        });
+      });
       await AsyncStorage.setItem(STORAGE_KEYS.LAST_SELECTION, JSON.stringify(updated));
     },
-    [lastSelection]
+    []
   );
 
   const updateSettings = useCallback(
     async (updates: Partial<AppSettings>): Promise<void> => {
-      const updated = { ...settings, ...updates };
-      setSettings(updated);
+      const updated = await new Promise<AppSettings>((resolve) => {
+        setSettings((prev) => {
+          const next = { ...prev, ...updates };
+          resolve(next);
+          return next;
+        });
+      });
       await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
     },
-    [settings]
+    []
   );
 
   const addTerminalShortcut = useCallback(

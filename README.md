@@ -87,8 +87,17 @@ nomadflow
 # Launch HTTP server in foreground
 nomadflow serve
 
+# Override the API port
+nomadflow serve --port 9090
+
 # Expose publicly via tunnel
 nomadflow serve --public
+
+# Open the web dashboard in a browser
+nomadflow web
+
+# Override the dashboard port
+nomadflow web --port 4000
 
 # Start/stop as a background daemon
 nomadflow start
@@ -97,8 +106,8 @@ nomadflow stop
 # Display tmux and daemon status
 nomadflow --status
 
-# Attach directly to a feature session
-nomadflow --attach <feature>
+# Attach directly to a tmux window
+nomadflow attach <window>
 ```
 
 ### Configuration
@@ -107,6 +116,7 @@ The configuration file is created automatically on first launch:
 
 ```toml
 # ~/.nomadflowcode/config.toml
+version = 1
 
 [paths]
 base_dir = "~/.nomadflowcode"
@@ -119,6 +129,9 @@ port = 7681
 
 [api]
 port = 8080
+
+[web]
+port = 3000
 
 # Uncomment to enable authentication
 # [auth]

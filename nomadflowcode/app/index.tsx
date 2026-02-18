@@ -1,9 +1,14 @@
+import { AgentsWaitingSection } from '@/components/mobile/AgentsWaitingSection';
+import { ResumeButton } from '@/components/mobile/ResumeButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
+import { fetchSessions } from '@/lib/server-commands';
+import type { AgentStateKind } from '@/lib/types/session';
 import type { Server } from '@shared';
+import Constants from 'expo-constants';
 import { Link, Stack, useRouter } from 'expo-router';
 import {
   MonitorIcon,
@@ -13,18 +18,48 @@ import {
   RocketIcon,
   PencilIcon,
 } from 'lucide-react-native';
-import { useColorScheme } from 'nativewind';
-import Constants from 'expo-constants';
 import * as React from 'react';
-import { FlatList, Pressable, View, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Pressable, ScrollView, View, Alert } from 'react-native';
 
 export default function ServersScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const { colorScheme } = useColorScheme();
-  const { servers, deleteServer, lastSelection, isLoading } = useStorage();
+  const { servers, deleteServer, lastSelection, getServer } = useStorage();
+
+  const lastServer = lastSelection.serverId ? getServer(lastSelection.serverId) : undefined;
+
+  const [resumeAgentInfo, setResumeAgentInfo] = React.useState<{
+    state: AgentStateKind;
+    name: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!lastServer?.apiUrl || !lastServer?.authToken || !lastSelection.featureName) {
+      setResumeAgentInfo(null);
+      return;
+    }
+    async function loadResumeInfo() {
+      const result = await fetchSessions(lastServer!);
+      if (result.success && result.data?.sessions) {
+        const match = result.data.sessions.find(
+          (s: { worktree: string }) => s.worktree === lastSelection.featureName
+        );
+        if (match) {
+          setResumeAgentInfo({
+            state: match.agentState,
+            name: `${match.agentType}-${match.agentNumber}`,
+          });
+        } else {
+          setResumeAgentInfo(null);
+        }
+      }
+    }
+    loadResumeInfo();
+  }, [lastServer, lastSelection.featureName]);
 
   const formatLastConnected = (timestamp?: number) => {
-    if (!timestamp) return 'Jamais connecté';
+    if (!timestamp) return t('servers.last_connected.never');
     const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -32,11 +67,11 @@ export default function ServersScreen() {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMins < 1) return "À l'instant";
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours}h`;
-    if (diffDays < 7) return `Il y a ${diffDays}j`;
-    return date.toLocaleDateString('fr-FR');
+    if (diffMins < 1) return t('servers.last_connected.just_now');
+    if (diffMins < 60) return t('servers.last_connected.minutes_ago', { minutes: diffMins });
+    if (diffHours < 24) return t('servers.last_connected.hours_ago', { hours: diffHours });
+    if (diffDays < 7) return t('servers.last_connected.days_ago', { days: diffDays });
+    return date.toLocaleDateString();
   };
 
   const handleServerPress = (server: Server) => {
@@ -48,36 +83,57 @@ export default function ServersScreen() {
   };
 
   const handleServerLongPress = (server: Server) => {
-    Alert.alert(server.name, 'Que voulez-vous faire ?', [
+    Alert.alert(server.name, t('common.what_to_do'), [
       {
-        text: 'Modifier',
+        text: t('common.edit'),
         onPress: () => handleEditServer(server),
       },
       {
-        text: 'Supprimer',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => confirmDelete(server),
       },
-      { text: 'Annuler', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
   const confirmDelete = (server: Server) => {
-    Alert.alert('Supprimer le serveur ?', `Êtes-vous sûr de vouloir supprimer "${server.name}" ?`, [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('servers.delete.confirm_title'), t('servers.delete.confirm_message', { name: server.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Supprimer',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => deleteServer(server.id),
       },
     ]);
   };
 
-  const renderServer = ({ item }: { item: Server }) => {
+  const handleResumePress = () => {
+    if (lastSelection.serverId && lastSelection.repoPath && lastSelection.featureName) {
+      router.push({
+        pathname: '/terminal',
+        params: {
+          serverId: lastSelection.serverId,
+          repoPath: lastSelection.repoPath,
+          featureName: lastSelection.featureName,
+        },
+      });
+    }
+  };
+
+  const handleAgentPress = (params: { serverId: string; repoPath: string; featureName: string }) => {
+    router.push({
+      pathname: '/terminal',
+      params,
+    });
+  };
+
+  const renderServerCard = (item: Server) => {
     const isLastUsed = lastSelection.serverId === item.id;
 
     return (
       <Pressable
+        key={item.id}
         onPress={() => handleServerPress(item)}
         onLongPress={() => handleServerLongPress(item)}
         className="mb-3">
@@ -92,7 +148,7 @@ export default function ServersScreen() {
                 {isLastUsed && (
                   <View className="rounded-full bg-primary px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-primary-foreground">
-                      Dernier
+                      {t('servers.badge.last_used')}
                     </Text>
                   </View>
                 )}
@@ -123,14 +179,14 @@ export default function ServersScreen() {
       <View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-primary/10">
         <Icon as={RocketIcon} className="text-primary" size={40} />
       </View>
-      <Text className="mb-2 text-center text-xl font-bold">Aucun serveur configuré</Text>
+      <Text className="mb-2 text-center text-xl font-bold">{t('servers.empty.title')}</Text>
       <Text className="mb-6 text-center text-muted-foreground">
-        Ajoutez votre premier serveur pour commencer à coder depuis n'importe où
+        {t('servers.empty.description')}
       </Text>
       <Link href="/add-server" asChild>
         <Button>
           <Icon as={PlusIcon} className="mr-2" size={18} />
-          <Text>Ajouter un serveur</Text>
+          <Text>{t('servers.add.button')}</Text>
         </Button>
       </Link>
     </View>
@@ -140,7 +196,7 @@ export default function ServersScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Serveurs',
+          title: t('servers.title'),
           headerRight: () => (
             <Link href="/settings" asChild>
               <Button variant="ghost" size="icon" className="mr-2">
@@ -151,18 +207,27 @@ export default function ServersScreen() {
         }}
       />
       <View className="flex-1 bg-background">
-        <FlatList
-          data={servers}
-          keyExtractor={(item) => item.id}
-          renderItem={renderServer}
-          ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{
-            padding: 16,
-            flexGrow: servers.length === 0 ? 1 : undefined,
-          }}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-        />
+        {servers.length === 0 ? (
+          renderEmpty()
+        ) : (
+          <ScrollView
+            contentContainerStyle={{ padding: 16 }}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}>
+            <ResumeButton
+              server={lastServer}
+              lastSelection={lastSelection}
+              agentState={resumeAgentInfo?.state}
+              agentName={resumeAgentInfo?.name}
+              onPress={handleResumePress}
+            />
+
+            <AgentsWaitingSection servers={servers} onAgentPress={handleAgentPress} />
+
+            <Text className="mb-2 text-sm font-semibold text-foreground">{t('servers.title')}</Text>
+            {servers.map(renderServerCard)}
+          </ScrollView>
+        )}
 
         {servers.length > 0 && (
           <Link href="/add-server" asChild>

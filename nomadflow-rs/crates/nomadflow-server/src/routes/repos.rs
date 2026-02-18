@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use serde_json::{json, Value};
 
 use nomadflow_core::error::NomadError;
@@ -31,14 +26,17 @@ async fn clone_repo(
 ) -> Result<Json<CloneRepoResponse>, (StatusCode, Json<Value>)> {
     match state
         .git
-        .clone_repo(&request.url, request.token.as_deref(), request.name.as_deref())
+        .clone_repo(
+            &request.url,
+            request.token.as_deref(),
+            request.name.as_deref(),
+        )
         .await
     {
         Ok((name, path, branch)) => Ok(Json(CloneRepoResponse { name, path, branch })),
-        Err(NomadError::AlreadyExists(msg)) => Err((
-            StatusCode::CONFLICT,
-            Json(json!({ "detail": msg })),
-        )),
+        Err(NomadError::AlreadyExists(msg)) => {
+            Err((StatusCode::CONFLICT, Json(json!({ "detail": msg }))))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "detail": e.to_string() })),

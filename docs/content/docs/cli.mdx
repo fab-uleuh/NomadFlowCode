@@ -24,10 +24,16 @@ Starts the HTTP server in the background, then launches the **TUI wizard**. When
 ### `serve`
 
 ```bash
-nomadflow serve
+nomadflow serve [--public] [--host <address>] [--port <port>]
 ```
 
 Runs the HTTP server in the **foreground** with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services.
+
+| Option | Description |
+|--------|-------------|
+| `--public` | Expose the server publicly via tunnel. See [Public Tunnel](/docs/server/tunnel). |
+| `--host <address>` | Override the displayed address (IP or domain name) for QR code and URL. |
+| `--port <port>` | Override the API server port (default: from `config.toml`, fallback `8080`). |
 
 The server handles **graceful shutdown**: on `Ctrl+C` or `SIGTERM`, it stops accepting new connections, completes in-flight requests, then cleanly stops the ttyd subprocess.
 
@@ -49,6 +55,39 @@ nomadflow stop
 
 Stops the background daemon. Reads the PID file, sends `SIGTERM` to trigger graceful shutdown, and waits for the process to exit (up to 10 seconds). If the process does not exit in time, `SIGKILL` is sent. The PID file is removed after the process exits.
 
+### `web`
+
+```bash
+nomadflow web [--port <port>]
+```
+
+Starts a lightweight HTTP server that serves the **web dashboard** (static files), then opens it in your default browser. This is a standalone server — no tmux, no ttyd, no auth required.
+
+| Option | Description |
+|--------|-------------|
+| `--port <port>` | Override the dashboard port (default: from `config.toml`, fallback `3000`). |
+
+### `link`
+
+```bash
+nomadflow link <path> [--name <name>]
+```
+
+Links an existing git repository to NomadFlow. The repository will appear in the repo list without cloning.
+
+| Option | Description |
+|--------|-------------|
+| `<path>` | Path to the git repository. |
+| `--name <name>` | Custom name for the link (defaults to the directory name). |
+
+### `unlink`
+
+```bash
+nomadflow unlink [<name>]
+```
+
+Removes a previously linked repository from NomadFlow. If no name is given, shows a picker.
+
 ## Options
 
 ### `--status`
@@ -59,13 +98,13 @@ nomadflow --status
 
 Displays the current **daemon status** (running/not running, PID) and the **tmux session status** (windows, features), then exits.
 
-### `--attach <feature>`
+### `attach`
 
 ```bash
-nomadflow --attach my-feature
+nomadflow attach [<window>]
 ```
 
-Starts the server briefly, then attaches directly to the tmux session. The server is gracefully shut down before attaching. Useful for quickly jumping into a running session from the command line.
+Attaches to an existing tmux window (no server needed). If a window name is provided (e.g. `omstudio:my-feature`), attaches directly. Otherwise, shows an interactive picker listing all windows with their current process status.
 
 ## TUI wizard
 

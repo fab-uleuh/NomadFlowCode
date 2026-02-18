@@ -43,15 +43,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let api = Router::new()
         .merge(routes::repos::router())
         .merge(routes::features::router())
+        .merge(routes::sessions::router())
+        .merge(routes::git_diff::router())
         .merge(routes::terminal::http_proxy_router())
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
 
     // WebSocket proxy to ttyd (auth via query param, handled in handler)
     let ws = Router::new().merge(routes::terminal::ws_router());
 
-    public
-        .merge(api)
-        .merge(ws)
+    let router = public.merge(api).merge(ws);
+
+    router
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -142,6 +147,31 @@ pub async fn serve(
 
     // 3. Build state and router
     let state = Arc::new(AppState::new(settings.clone()));
+
+    // Install/update hook scripts before accepting connections (AC #1)
+    if let Err(e) = state.agent_state.ensure_hook_scripts().await {
+        tracing::warn!("Failed to install hook scripts: {e}");
+    }
+
+    // Auto-inject hooks into all tracked repos so Claude Code state tracking
+    // works without requiring a manual create-session first.
+    match state.git.list_repos().await {
+        Ok(repos) => {
+            for repo in &repos {
+                let repo_path = std::path::Path::new(&repo.path);
+                // Resolve symlinks (repos in ~/.nomadflowcode/repos/ are symlinks)
+                let real_path = repo_path.canonicalize().unwrap_or(repo_path.to_path_buf());
+                if let Err(e) = state.agent_state.inject_hooks_for_project(&real_path).await {
+                    tracing::warn!(repo = %repo.name, "Failed to inject hooks: {e}");
+                }
+            }
+            if !repos.is_empty() {
+                info!(count = repos.len(), "Hooks injected into tracked repos");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to list repos for hook injection: {e}"),
+    }
+
     let addr = format!("{}:{}", settings.api.host, settings.api.port);
     let router = build_router(state.clone());
 
@@ -182,6 +212,30 @@ pub async fn serve(
     ttyd.stop().await;
     info!("Server stopped");
 
+    Ok(())
+}
+
+/// Run a lightweight HTTP server that serves the web dashboard (static files).
+/// This is a separate server from the API — no tmux, no ttyd, no auth.
+pub async fn serve_web(settings: &Settings, shutdown: CancellationToken) -> color_eyre::Result<()> {
+    let port = settings.web.port;
+    let cors = CorsLayer::permissive();
+
+    let router = routes::dashboard::router()
+        .layer(cors)
+        .layer(TraceLayer::new_for_http());
+
+    let addr = format!("0.0.0.0:{port}");
+    let listener = TcpListener::bind(&addr).await?;
+    info!(%addr, "Web dashboard listening");
+
+    display::open_browser(&format!("http://localhost:{port}"));
+
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown.cancelled_owned())
+        .await?;
+
+    info!("Web dashboard stopped");
     Ok(())
 }
 

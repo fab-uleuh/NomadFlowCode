@@ -25,6 +25,8 @@ urlencoding = "2"
 rand = "0.9"
 subtle = "2"
 nomadflow-ws = { path = "../nomadflow-ws" }
+rust-embed = "8"
+mime_guess = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react-native';
 import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FlatList,
   Pressable,
@@ -31,9 +32,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ReposScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ serverId: string }>();
   const { getServer, addRecentRepo, saveLastSelection, updateServer, lastSelection } = useStorage();
 
@@ -74,10 +78,10 @@ export default function ReposScreen() {
       if (result.success && result.data) {
         setRepos(result.data.repos);
       } else {
-        throw new Error(result.error || 'Failed to load repos');
+        throw new Error(result.error || t('repos.error.load_failed'));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      const message = err instanceof Error ? err.message : t('common.error.unknown');
       setError(message);
     } finally {
       setIsLoading(false);
@@ -100,10 +104,10 @@ export default function ReposScreen() {
 
   const handleQuickTerminal = () => {
     if (!server) return;
-    Alert.alert('Terminal direct', 'Ouvrir un terminal sans sélectionner de feature ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('repos.quick_terminal.title'), t('repos.quick_terminal.confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Ouvrir',
+        text: t('common.open'),
         onPress: () => {
           router.push({
             pathname: '/terminal',
@@ -123,7 +127,7 @@ export default function ReposScreen() {
 
     const trimmedUrl = cloneUrl.trim();
     if (!trimmedUrl) {
-      Alert.alert('Erreur', 'Veuillez entrer une URL de repository');
+      Alert.alert(t('common.error'), t('repos.clone.error.url_required'));
       return;
     }
 
@@ -146,11 +150,11 @@ export default function ReposScreen() {
         setCloneName('');
         await loadRepos();
       } else {
-        throw new Error(result.error || 'Failed to clone repository');
+        throw new Error(result.error || t('repos.clone.error.failed'));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors du clone';
-      Alert.alert('Erreur', message);
+      const message = err instanceof Error ? err.message : t('repos.clone.error.failed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setIsCloning(false);
     }
@@ -172,7 +176,7 @@ export default function ReposScreen() {
                 {isLastUsed && (
                   <View className="rounded-full bg-primary px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-primary-foreground">
-                      Dernier
+                      {t('repos.badge.last_used')}
                     </Text>
                   </View>
                 )}
@@ -198,12 +202,12 @@ export default function ReposScreen() {
             <Icon as={AlertCircleIcon} className="text-destructive" size={40} />
           </View>
           <Text className="mb-2 text-center text-xl font-bold text-destructive">
-            Erreur de connexion
+            {t('repos.error.connection_title')}
           </Text>
           <Text className="mb-6 text-center text-muted-foreground">{error}</Text>
           <Button onPress={() => loadRepos()}>
             <Icon as={RefreshCwIcon} className="mr-2" size={18} />
-            <Text>Réessayer</Text>
+            <Text>{t('common.retry')}</Text>
           </Button>
         </>
       ) : (
@@ -211,9 +215,9 @@ export default function ReposScreen() {
           <View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-muted">
             <Icon as={PackageIcon} className="text-muted-foreground" size={40} />
           </View>
-          <Text className="mb-2 text-center text-xl font-bold">Aucun repository trouvé</Text>
+          <Text className="mb-2 text-center text-xl font-bold">{t('repos.empty.title')}</Text>
           <Text className="text-center text-muted-foreground">
-            Vérifiez que le script list-repos.sh est bien configuré sur le serveur
+            {t('repos.empty.description')}
           </Text>
         </>
       )}
@@ -223,7 +227,7 @@ export default function ReposScreen() {
   if (!server) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <Text className="text-destructive">Serveur non trouvé</Text>
+        <Text className="text-destructive">{t('common.error.server_not_found')}</Text>
       </View>
     );
   }
@@ -232,7 +236,7 @@ export default function ReposScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" />
-        <Text className="mt-4 text-muted-foreground">Chargement des repositories...</Text>
+        <Text className="mt-4 text-muted-foreground">{t('repos.loading')}</Text>
       </View>
     );
   }
@@ -262,12 +266,12 @@ export default function ReposScreen() {
           showsVerticalScrollIndicator={false}
         />
 
-        <View className="absolute bottom-6 left-4 right-4 flex-row items-center gap-3">
+        <View className="absolute left-4 right-4 flex-row items-center gap-3" style={{ bottom: insets.bottom + 16 }}>
           <Pressable
             onPress={handleQuickTerminal}
             className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-card p-4 shadow-lg">
             <Icon as={TerminalIcon} className="text-primary" size={20} />
-            <Text className="font-medium">Terminal rapide</Text>
+            <Text className="font-medium">{t('repos.quick_terminal.button')}</Text>
           </Pressable>
           <Button
             size="icon"
@@ -282,22 +286,27 @@ export default function ReposScreen() {
           visible={showCloneModal}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowCloneModal(false)}>
+          onRequestClose={() => {
+            setShowCloneModal(false);
+            setCloneUrl('');
+            setCloneToken('');
+            setCloneName('');
+          }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             className="flex-1 items-center justify-center bg-black/70 p-4">
             <Card className="w-full max-w-md">
               <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Cloner un repository</CardTitle>
-                <Pressable onPress={() => setShowCloneModal(false)}>
+                <CardTitle>{t('repos.clone.title')}</CardTitle>
+                <Pressable onPress={() => { setShowCloneModal(false); setCloneUrl(''); setCloneToken(''); setCloneName(''); }} hitSlop={12}>
                   <Icon as={XIcon} className="text-muted-foreground" size={20} />
                 </Pressable>
               </CardHeader>
               <View className="gap-4 p-4">
                 <View className="gap-2">
-                  <Label nativeID="cloneUrl">URL (HTTPS)</Label>
+                  <Label nativeID="cloneUrl">{t('repos.clone.label.url')}</Label>
                   <Input
-                    placeholder="https://github.com/user/repo.git"
+                    placeholder={t('repos.clone.placeholder.url')}
                     value={cloneUrl}
                     onChangeText={setCloneUrl}
                     autoCapitalize="none"
@@ -309,9 +318,9 @@ export default function ReposScreen() {
                 </View>
 
                 <View className="gap-2">
-                  <Label nativeID="cloneToken">Token (optionnel)</Label>
+                  <Label nativeID="cloneToken">{t('repos.clone.label.token')}</Label>
                   <Input
-                    placeholder="ghp_... / glpat-... / token"
+                    placeholder={t('repos.clone.placeholder.token')}
                     value={cloneToken}
                     onChangeText={setCloneToken}
                     autoCapitalize="none"
@@ -322,9 +331,9 @@ export default function ReposScreen() {
                 </View>
 
                 <View className="gap-2">
-                  <Label nativeID="cloneName">Nom (optionnel)</Label>
+                  <Label nativeID="cloneName">{t('repos.clone.label.name')}</Label>
                   <Input
-                    placeholder="Nom du dossier (auto-détecté)"
+                    placeholder={t('repos.clone.placeholder.name')}
                     value={cloneName}
                     onChangeText={setCloneName}
                     autoCapitalize="none"
@@ -343,13 +352,13 @@ export default function ReposScreen() {
                       setCloneToken('');
                       setCloneName('');
                     }}>
-                    <Text>Annuler</Text>
+                    <Text>{t('common.cancel')}</Text>
                   </Button>
                   <Button className="flex-1" onPress={cloneRepo} disabled={isCloning}>
                     {isCloning ? (
                       <ActivityIndicator size="small" color="white" />
                     ) : (
-                      <Text>Cloner</Text>
+                      <Text>{t('repos.clone.button')}</Text>
                     )}
                   </Button>
                 </View>

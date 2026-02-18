@@ -1,12 +1,14 @@
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::prelude::*;
 
+use nomadflow_core::agent_state::AgentStateService;
 use nomadflow_core::config::Settings;
-use nomadflow_core::models::{Feature, Repository};
+use nomadflow_core::models::{AgentStateKind, Feature, Repository};
+use nomadflow_core::services::tmux::parse_session_window as core_parse_session_window;
 
 use crate::api_client;
 use crate::event::{poll_event, AppEvent};
@@ -17,13 +19,15 @@ use crate::widgets;
 
 /// What the TUI should do when it exits.
 pub enum AppResult {
-    Attach(String), // tmux session name
+    Attach(String),               // tmux session name
+    AttachWindow(String, String), // (tmux session name, window name)
     Quit,
 }
 
 /// Wizard screens.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
+    SessionPicker,
     Setup,
     Resume,
     ServerPicker,
@@ -48,6 +52,9 @@ pub struct App {
     pub repo: Option<Repository>,
     pub feature: Option<Feature>,
 
+    // Session picker state
+    pub session_items: Vec<screens::session_picker::SelectableItem>,
+
     // Server health
     pub health_map: std::collections::HashMap<String, bool>,
     pub health_checking: bool,
@@ -71,9 +78,17 @@ pub struct App {
     pub setup_subdomain: String,
     pub setup_public: bool,
 
+    // Delete confirmation state
+    pub show_delete_confirm: bool,
+    pub delete_window_name: Option<String>,
+
+    // Agent state refresh
+    pub last_state_refresh: Instant,
+
     // Result
     pub should_quit: bool,
     pub attach_session: Option<String>,
+    pub attach_window: Option<String>,
 }
 
 /// Feature enriched with local tmux pane command.
@@ -115,8 +130,19 @@ impl App {
             && cli_state.last_repo.is_some()
             && cli_state.last_feature.is_some();
 
+        // Check for active managed sessions (3-part window names)
+        let session_items = if !needs_setup {
+            screens::session_picker::build_selectable_items_from_settings(&settings)
+        } else {
+            Vec::new()
+        };
+        // session_items always has at least "Browse repos..." when sessions exist
+        let has_sessions = session_items.len() > 1; // more than just "Browse repos..."
+
         let initial_screen = if needs_setup {
             Screen::Setup
+        } else if has_sessions {
+            Screen::SessionPicker
         } else if has_last {
             Screen::Resume
         } else {
@@ -152,6 +178,7 @@ impl App {
             features: Vec::new(),
             repo: None,
             feature: None,
+            session_items,
             health_map: std::collections::HashMap::new(),
             health_checking: false,
             selected_index: 0,
@@ -167,8 +194,21 @@ impl App {
             setup_secret,
             setup_subdomain,
             setup_public: false,
+            show_delete_confirm: false,
+            delete_window_name: None,
+            last_state_refresh: Instant::now(),
             should_quit: false,
             attach_session: None,
+            attach_window: None,
+        }
+    }
+
+    /// Reload the session list from tmux and clamp selection.
+    pub fn reload_sessions(&mut self) {
+        self.session_items =
+            screens::session_picker::build_selectable_items_from_settings(&self.settings);
+        if self.selected_index >= self.session_items.len() {
+            self.selected_index = self.session_items.len().saturating_sub(1);
         }
     }
 
@@ -188,6 +228,12 @@ impl App {
             self.trigger_load_repos(tx.clone());
         }
 
+        // Trigger initial agent state refresh for session picker
+        if self.screen == Screen::SessionPicker && !self.session_items.is_empty() {
+            self.trigger_state_refresh(tx.clone());
+            self.last_state_refresh = Instant::now();
+        }
+
         loop {
             // Draw
             terminal.draw(|f| self.draw(f))?;
@@ -202,11 +248,23 @@ impl App {
                 self.handle_key(key.code, key.modifiers, tx.clone());
             }
 
+            // Periodic agent state refresh (every 3s) on session picker
+            if self.screen == Screen::SessionPicker
+                && !self.session_items.is_empty()
+                && self.last_state_refresh.elapsed() >= Duration::from_secs(3)
+            {
+                self.trigger_state_refresh(tx.clone());
+                self.last_state_refresh = Instant::now();
+            }
+
             if self.should_quit {
-                return Ok(match self.attach_session.take() {
-                    Some(session) => AppResult::Attach(session),
-                    None => AppResult::Quit,
-                });
+                return Ok(
+                    match (self.attach_session.take(), self.attach_window.take()) {
+                        (Some(session), Some(window)) => AppResult::AttachWindow(session, window),
+                        (Some(session), None) => AppResult::Attach(session),
+                        _ => AppResult::Quit,
+                    },
+                );
             }
         }
     }
@@ -219,7 +277,7 @@ impl App {
             .constraints([
                 Constraint::Length(3), // Header
                 Constraint::Length(1), // Breadcrumb
-                Constraint::Min(1),   // Content
+                Constraint::Min(1),    // Content
                 Constraint::Length(1), // Footer
             ])
             .split(area);
@@ -238,6 +296,7 @@ impl App {
 
         // Content
         match self.screen {
+            Screen::SessionPicker => screens::session_picker::render(frame, chunks[2], self),
             Screen::Setup => screens::setup::render(frame, chunks[2], self),
             Screen::Resume => screens::resume::render(frame, chunks[2], self),
             Screen::ServerPicker => screens::server_picker::render(frame, chunks[2], self),
@@ -252,6 +311,13 @@ impl App {
         let footer_text = match self.screen {
             Screen::Attaching => "",
             Screen::Setup => "Escape: back",
+            Screen::SessionPicker => {
+                if self.show_delete_confirm {
+                    "" // Footer replaced by confirmation bar in session_picker render
+                } else {
+                    "q: quit  \u{2191}\u{2193}: navigate  Enter: attach  d: close  r: reload  | nomadflow run: create session"
+                }
+            }
             _ => "Escape: back  q: quit",
         };
         let footer = ratatui::widgets::Paragraph::new(footer_text)
@@ -270,6 +336,7 @@ impl App {
             && self.screen != Screen::FeatureCreate
             && self.screen != Screen::ServerAdd
             && self.screen != Screen::Setup
+            && !self.show_delete_confirm
         {
             self.should_quit = true;
             return;
@@ -280,12 +347,18 @@ impl App {
         }
 
         if code == KeyCode::Esc {
-            self.go_back();
-            return;
+            // During delete confirmation, Esc is handled by session_picker_key
+            if self.screen == Screen::SessionPicker && self.show_delete_confirm {
+                // Fall through to screen-specific handler
+            } else {
+                self.go_back();
+                return;
+            }
         }
 
         // Screen-specific keys
         match self.screen {
+            Screen::SessionPicker => self.handle_session_picker_key(code, tx),
             Screen::Setup => self.handle_setup_key(code),
             Screen::Resume => self.handle_resume_key(code, tx),
             Screen::ServerPicker => self.handle_server_picker_key(code, tx),
@@ -300,6 +373,10 @@ impl App {
     fn go_back(&mut self) {
         self.error = None;
         match self.screen {
+            Screen::SessionPicker => {
+                // Root screen — Esc quits
+                self.should_quit = true;
+            }
             Screen::RepoPicker => {
                 self.screen = Screen::ServerPicker;
                 self.server = None;
@@ -334,6 +411,110 @@ impl App {
             Screen::Resume => {
                 self.screen = Screen::ServerPicker;
                 self.selected_index = 0;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_session_picker_key(
+        &mut self,
+        code: KeyCode,
+        _tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    ) {
+        // Handle delete confirmation mode
+        if self.show_delete_confirm {
+            match code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    if let Some(window) = self.delete_window_name.take() {
+                        let killed = tmux_local::kill_window(&self.settings.tmux.session, &window);
+                        if killed {
+                            self.error = None;
+                        } else {
+                            self.error =
+                                Some("Failed to close session (may already be gone)".to_string());
+                        }
+                        self.show_delete_confirm = false;
+                        self.reload_sessions();
+
+                        // If no sessions left, transition away
+                        let has_sessions = self.session_items.len() > 1;
+                        if !has_sessions {
+                            let has_last = self.cli_state.last_server.is_some()
+                                && self.cli_state.last_repo.is_some()
+                                && self.cli_state.last_feature.is_some();
+                            self.screen = if has_last {
+                                Screen::Resume
+                            } else {
+                                Screen::ServerPicker
+                            };
+                            self.selected_index = 0;
+                        }
+                    }
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                    self.show_delete_confirm = false;
+                    self.delete_window_name = None;
+                }
+                _ => {} // Block all other keys during confirmation
+            }
+            return;
+        }
+
+        let count = self.session_items.len();
+        match code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_index > 0 {
+                    self.selected_index -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.selected_index + 1 < count {
+                    self.selected_index += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if self.selected_index < count {
+                    let item = &self.session_items[self.selected_index];
+                    match &item.window_name {
+                        Some(window) => {
+                            // Verify window still exists before attaching
+                            if tmux_local::window_exists(&self.settings.tmux.session, window) {
+                                self.attach_window = Some(window.clone());
+                                self.attach_session = Some(self.settings.tmux.session.clone());
+                                self.should_quit = true;
+                            } else {
+                                self.error =
+                                    Some("Session no longer exists — reloading...".to_string());
+                                self.reload_sessions();
+                            }
+                        }
+                        None => {
+                            // "Browse repos..." — enter existing flow
+                            let has_last = self.cli_state.last_server.is_some()
+                                && self.cli_state.last_repo.is_some()
+                                && self.cli_state.last_feature.is_some();
+                            self.screen = if has_last {
+                                Screen::Resume
+                            } else {
+                                Screen::ServerPicker
+                            };
+                            self.selected_index = 0;
+                        }
+                    }
+                }
+            }
+            KeyCode::Char('d') | KeyCode::Char('x') => {
+                // Only allow delete on session items (not "Browse repos...")
+                if self.selected_index < count {
+                    let item = &self.session_items[self.selected_index];
+                    if let Some(ref window) = item.window_name {
+                        self.show_delete_confirm = true;
+                        self.delete_window_name = Some(window.clone());
+                    }
+                }
+            }
+            KeyCode::Char('r') => {
+                self.reload_sessions();
             }
             _ => {}
         }
@@ -892,8 +1073,41 @@ impl App {
             AppEvent::HealthResult(id, ok) => {
                 self.health_map.insert(id, ok);
             }
+            AppEvent::AgentStatesRefreshed(states) => {
+                for (window, state) in states {
+                    if let Some(item) = self
+                        .session_items
+                        .iter_mut()
+                        .find(|i| i.window_name.as_deref() == Some(&window))
+                    {
+                        item.agent_state = Some(state);
+                    }
+                }
+            }
             _ => {}
         }
+    }
+
+    fn trigger_state_refresh(&self, tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
+        let agent_svc = AgentStateService::new(&self.settings);
+        let tmux_session = self.settings.tmux.session.clone();
+        let window_names: Vec<String> = self
+            .session_items
+            .iter()
+            .filter_map(|i| i.window_name.clone())
+            .collect();
+
+        tokio::spawn(async move {
+            let mut states = Vec::new();
+            for window_name in &window_names {
+                if let Some(session) = core_parse_session_window(window_name) {
+                    let state =
+                        read_session_state(&agent_svc, &session, &tmux_session).await;
+                    states.push((window_name.clone(), state));
+                }
+            }
+            tx.send(AppEvent::AgentStatesRefreshed(states)).ok();
+        });
     }
 
     fn trigger_load_repos(&self, tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
@@ -928,8 +1142,7 @@ impl App {
             (self.server.clone(), self.repo.clone(), self.feature.clone())
         {
             tokio::spawn(async move {
-                let result =
-                    api_client::switch_feature(&server, &repo.path, &feature.name).await;
+                let result = api_client::switch_feature(&server, &repo.path, &feature.name).await;
                 tx.send(AppEvent::SwitchDone(result)).ok();
             });
         }
@@ -979,23 +1192,53 @@ impl App {
     }
 }
 
+/// Read agent state for a session from disk (claude-code) or tmux process detection (generic).
+///
+/// Delegates to `AgentStateService::read_state()` for claude-code sessions.
+/// Uses local tmux commands for generic sessions (TUI-specific tmux_local module).
+async fn read_session_state(
+    svc: &AgentStateService,
+    session: &nomadflow_core::models::Session,
+    tmux_session: &str,
+) -> AgentStateKind {
+    if session.agent_type == "claude-code" {
+        svc.read_state(&session.session_id)
+            .await
+            .map(|s| s.state)
+            .unwrap_or(AgentStateKind::Unknown)
+    } else if !tmux_local::window_exists(tmux_session, &session.window_name) {
+        AgentStateKind::Done
+    } else {
+        match tmux_local::get_pane_command(tmux_session, &session.window_name) {
+            Some(cmd) if tmux_local::is_shell_idle_str(Some(&cmd)) => {
+                AgentStateKind::WaitingForInput
+            }
+            Some(_) => AgentStateKind::Generating,
+            None => AgentStateKind::Idle,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn test_settings() -> Settings {
-        Settings::default()
+        let mut settings = Settings::default();
+        settings.tmux.session = format!("nf-test-default-{}", std::process::id());
+        settings
     }
 
     /// Create a temp settings with a config.toml so setup wizard doesn't trigger.
     fn tmp_settings_with_config() -> (tempfile::TempDir, Settings) {
         let tmp = tempfile::TempDir::new().unwrap();
-        let settings = Settings {
+        let mut settings = Settings {
             paths: nomadflow_core::config::PathsConfig {
                 base_dir: tmp.path().to_string_lossy().to_string(),
             },
             ..Default::default()
         };
+        settings.tmux.session = format!("nf-test-cfg-{}", std::process::id());
         settings.ensure_directories().unwrap();
         // Create config.toml so setup screen is skipped
         std::fs::write(settings.config_file(), "").unwrap();
@@ -1073,5 +1316,407 @@ mod tests {
         app.screen = Screen::ServerAdd;
         app.go_back();
         assert_eq!(app.screen, Screen::ServerPicker);
+    }
+
+    #[test]
+    fn test_go_back_from_session_picker() {
+        let mut app = App::new(test_settings());
+        app.screen = Screen::SessionPicker;
+        app.go_back();
+        assert!(app.should_quit); // SessionPicker is root — Esc quits
+    }
+
+    #[test]
+    fn test_initial_screen_session_picker_with_tmux_sessions() {
+        if !tmux_local::is_tmux_installed() {
+            eprintln!("Skipping: tmux not installed");
+            return;
+        }
+
+        let pid = std::process::id();
+        let session_name = format!("nf-test-app-{pid}");
+
+        // Create a tmux session with a session-format window
+        let created = std::process::Command::new("tmux")
+            .args([
+                "new-session",
+                "-d",
+                "-s",
+                &session_name,
+                "-n",
+                "myapp:feat:agent-1",
+            ])
+            .output()
+            .ok()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !created {
+            eprintln!("Skipping: could not create tmux session");
+            return;
+        }
+
+        let (_tmp, mut settings) = tmp_settings_with_config();
+        settings.tmux.session = session_name.clone();
+
+        let app = App::new(settings);
+
+        // Cleanup
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &session_name])
+            .output();
+
+        assert_eq!(app.screen, Screen::SessionPicker);
+        assert!(app.session_items.len() > 1); // sessions + "Browse repos..."
+    }
+
+    #[test]
+    fn test_initial_screen_no_sessions_falls_through() {
+        if !tmux_local::is_tmux_installed() {
+            eprintln!("Skipping: tmux not installed");
+            return;
+        }
+
+        let pid = std::process::id();
+        let session_name = format!("nf-test-nosess-{pid}");
+
+        // Create a tmux session with only a single-part window (not a session)
+        let created = std::process::Command::new("tmux")
+            .args(["new-session", "-d", "-s", &session_name, "-n", "zsh"])
+            .output()
+            .ok()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !created {
+            eprintln!("Skipping: could not create tmux session");
+            return;
+        }
+
+        let (_tmp, mut settings) = tmp_settings_with_config();
+        settings.tmux.session = session_name.clone();
+
+        let app = App::new(settings);
+
+        // Cleanup
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &session_name])
+            .output();
+
+        // No session-format windows → falls through to ServerPicker (no last session)
+        assert_eq!(app.screen, Screen::ServerPicker);
+        assert!(app.session_items.is_empty());
+    }
+
+    // ── delete confirmation state tests ──
+
+    fn app_with_session_items() -> App {
+        let mut app = App::new(test_settings());
+        app.screen = Screen::SessionPicker;
+        app.session_items = vec![
+            screens::session_picker::SelectableItem {
+                label: "agent-1".to_string(),
+                window_name: Some("myapp:feat:agent-1".to_string()),
+                group_header: Some("myapp / feat".to_string()),
+                agent_state: None,
+            },
+            screens::session_picker::SelectableItem {
+                label: "agent-2".to_string(),
+                window_name: Some("myapp:feat:agent-2".to_string()),
+                group_header: None,
+                agent_state: None,
+            },
+            screens::session_picker::SelectableItem {
+                label: "Browse repos...".to_string(),
+                window_name: None,
+                group_header: None,
+                agent_state: None,
+            },
+        ];
+        app.selected_index = 0;
+        app
+    }
+
+    #[test]
+    fn test_delete_confirm_d_key_on_session_item() {
+        let mut app = app_with_session_items();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Char('d'), tx);
+
+        assert!(app.show_delete_confirm);
+        assert_eq!(
+            app.delete_window_name,
+            Some("myapp:feat:agent-1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_delete_confirm_x_key_on_session_item() {
+        let mut app = app_with_session_items();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Char('x'), tx);
+
+        assert!(app.show_delete_confirm);
+        assert_eq!(
+            app.delete_window_name,
+            Some("myapp:feat:agent-1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_delete_confirm_d_key_on_browse_repos_ignored() {
+        let mut app = app_with_session_items();
+        app.selected_index = 2; // "Browse repos..."
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Char('d'), tx);
+
+        assert!(!app.show_delete_confirm);
+        assert!(app.delete_window_name.is_none());
+    }
+
+    #[test]
+    fn test_delete_confirm_cancel_with_n() {
+        let mut app = app_with_session_items();
+        app.show_delete_confirm = true;
+        app.delete_window_name = Some("myapp:feat:agent-1".to_string());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Char('n'), tx);
+
+        assert!(!app.show_delete_confirm);
+        assert!(app.delete_window_name.is_none());
+    }
+
+    #[test]
+    fn test_delete_confirm_cancel_with_esc() {
+        let mut app = app_with_session_items();
+        app.show_delete_confirm = true;
+        app.delete_window_name = Some("myapp:feat:agent-1".to_string());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Esc, tx);
+
+        assert!(!app.show_delete_confirm);
+        assert!(app.delete_window_name.is_none());
+    }
+
+    #[test]
+    fn test_delete_confirm_y_on_nonexistent_window_sets_error() {
+        let mut app = app_with_session_items();
+        app.show_delete_confirm = true;
+        // Set a window name that doesn't actually exist in tmux
+        app.delete_window_name = Some("nonexistent:window:agent-99".to_string());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.handle_session_picker_key(KeyCode::Char('y'), tx);
+
+        assert!(!app.show_delete_confirm);
+        assert!(app.delete_window_name.is_none());
+        assert!(app.error.is_some());
+        assert!(app
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("Failed to close session"));
+    }
+
+    #[test]
+    fn test_delete_confirm_blocks_navigation() {
+        let mut app = app_with_session_items();
+        app.show_delete_confirm = true;
+        app.delete_window_name = Some("myapp:feat:agent-1".to_string());
+        let original_index = app.selected_index;
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Arrow keys should be blocked during confirmation
+        app.handle_session_picker_key(KeyCode::Down, tx.clone());
+        assert_eq!(app.selected_index, original_index);
+        assert!(app.show_delete_confirm); // Still in confirm mode
+
+        app.handle_session_picker_key(KeyCode::Up, tx);
+        assert_eq!(app.selected_index, original_index);
+        assert!(app.show_delete_confirm);
+    }
+
+    #[test]
+    fn test_delete_confirm_y_kills_and_reloads() {
+        if !tmux_local::is_tmux_installed() {
+            eprintln!("Skipping: tmux not installed");
+            return;
+        }
+
+        let pid = std::process::id();
+        let session_name = format!("nf-test-delconf-{pid}");
+        let window1 = "myapp:feat:agent-1";
+        let window2 = "myapp:feat:agent-2";
+
+        // Create session with 2 windows
+        let created = std::process::Command::new("tmux")
+            .args(["new-session", "-d", "-s", &session_name, "-n", window1])
+            .output()
+            .ok()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !created {
+            eprintln!("Skipping: could not create tmux session");
+            return;
+        }
+
+        let _ = std::process::Command::new("tmux")
+            .args(["new-window", "-t", &session_name, "-n", window2])
+            .output();
+
+        let (_tmp, mut settings) = tmp_settings_with_config();
+        settings.tmux.session = session_name.clone();
+
+        let mut app = App::new(settings);
+        assert_eq!(app.screen, Screen::SessionPicker);
+        // session_items should have agent-1, agent-2, and "Browse repos..."
+        let initial_session_count = app
+            .session_items
+            .iter()
+            .filter(|i| i.window_name.is_some())
+            .count();
+        assert_eq!(initial_session_count, 2);
+
+        // Press 'd' on the first session
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        app.handle_session_picker_key(KeyCode::Char('d'), tx.clone());
+        assert!(app.show_delete_confirm);
+
+        // Confirm with 'y'
+        app.handle_session_picker_key(KeyCode::Char('y'), tx);
+        assert!(!app.show_delete_confirm);
+        assert!(app.delete_window_name.is_none());
+
+        // Session list should now have 1 session
+        let remaining = app
+            .session_items
+            .iter()
+            .filter(|i| i.window_name.is_some())
+            .count();
+        assert_eq!(remaining, 1);
+
+        // The remaining window should be agent-2
+        let remaining_window = app
+            .session_items
+            .iter()
+            .find(|i| i.window_name.is_some())
+            .unwrap();
+        assert_eq!(remaining_window.window_name.as_deref(), Some(window2));
+
+        // Cleanup
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &session_name])
+            .output();
+    }
+
+    // ── read_session_state tests ──
+
+    fn svc_from_tmp(tmp: &tempfile::TempDir) -> AgentStateService {
+        let settings = Settings {
+            paths: nomadflow_core::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        AgentStateService::new(&settings)
+    }
+
+    #[tokio::test]
+    async fn test_read_session_state_claude_code_from_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let svc = svc_from_tmp(&tmp);
+        let session_dir = svc.sessions_dir().join("myapp-feat-claude-code-1");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        std::fs::write(
+            session_dir.join("agent-state.json"),
+            r#"{"sessionId":"myapp-feat-claude-code-1","agentType":"claude-code","state":"waiting_for_input","timestamp":"2026-02-15T10:30:00Z","lastEvent":"Stop"}"#,
+        )
+        .unwrap();
+
+        let session = nomadflow_core::models::Session {
+            session_id: "myapp-feat-claude-code-1".to_string(),
+            window_name: "myapp:feat:claude-code-1".to_string(),
+            repo: "myapp".to_string(),
+            worktree: "feat".to_string(),
+            agent_type: "claude-code".to_string(),
+            agent_number: 1,
+        };
+
+        let state = read_session_state(&svc, &session, "unused").await;
+        assert_eq!(state, AgentStateKind::WaitingForInput);
+    }
+
+    #[tokio::test]
+    async fn test_read_session_state_claude_code_missing_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let svc = svc_from_tmp(&tmp);
+
+        let session = nomadflow_core::models::Session {
+            session_id: "nonexistent-session".to_string(),
+            window_name: "myapp:feat:claude-code-1".to_string(),
+            repo: "myapp".to_string(),
+            worktree: "feat".to_string(),
+            agent_type: "claude-code".to_string(),
+            agent_number: 1,
+        };
+
+        let state = read_session_state(&svc, &session, "unused").await;
+        assert_eq!(state, AgentStateKind::Unknown);
+    }
+
+    #[tokio::test]
+    async fn test_read_session_state_claude_code_corrupt_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let svc = svc_from_tmp(&tmp);
+        let session_dir = svc.sessions_dir().join("corrupt-session");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        std::fs::write(session_dir.join("agent-state.json"), "not json").unwrap();
+
+        let session = nomadflow_core::models::Session {
+            session_id: "corrupt-session".to_string(),
+            window_name: "myapp:feat:claude-code-1".to_string(),
+            repo: "myapp".to_string(),
+            worktree: "feat".to_string(),
+            agent_type: "claude-code".to_string(),
+            agent_number: 1,
+        };
+
+        let state = read_session_state(&svc, &session, "unused").await;
+        assert_eq!(state, AgentStateKind::Unknown);
+    }
+
+    #[tokio::test]
+    async fn test_agent_states_refreshed_event_updates_items() {
+        let mut app = app_with_session_items();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Simulate receiving state refresh results
+        app.handle_async_event(
+            AppEvent::AgentStatesRefreshed(vec![
+                (
+                    "myapp:feat:agent-1".to_string(),
+                    AgentStateKind::WaitingForInput,
+                ),
+                ("myapp:feat:agent-2".to_string(), AgentStateKind::Generating),
+            ]),
+            tx,
+        );
+
+        assert_eq!(
+            app.session_items[0].agent_state,
+            Some(AgentStateKind::WaitingForInput)
+        );
+        assert_eq!(
+            app.session_items[1].agent_state,
+            Some(AgentStateKind::Generating)
+        );
+        // "Browse repos..." should remain None
+        assert_eq!(app.session_items[2].agent_state, None);
     }
 }

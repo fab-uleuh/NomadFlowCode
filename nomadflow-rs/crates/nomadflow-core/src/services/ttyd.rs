@@ -38,26 +38,23 @@ impl TtydService {
         }
 
         let mut cmd = Command::new("ttyd");
-        cmd.arg("-p")
-            .arg(self.port.to_string())
-            .arg("-W");
+        cmd.arg("-p").arg(self.port.to_string()).arg("-W");
 
         if !self.secret.is_empty() {
-            cmd.arg("-c")
-                .arg(format!("nomadflow:{}", self.secret));
+            cmd.arg("-c").arg(format!("nomadflow:{}", self.secret));
         }
 
         cmd.arg("tmux")
-            .arg("attach-session")
+            .arg("new-session")
             .arg("-t")
             .arg(&self.session_name);
 
         cmd.stdout(std::process::Stdio::null());
         cmd.stderr(std::process::Stdio::null());
 
-        let child = cmd.spawn().map_err(|e| {
-            NomadError::CommandFailed(format!("Failed to start ttyd: {e}"))
-        })?;
+        let child = cmd
+            .spawn()
+            .map_err(|e| NomadError::CommandFailed(format!("Failed to start ttyd: {e}")))?;
 
         self.process = Some(child);
 

@@ -72,3 +72,57 @@ export interface AttachBranchResult {
   branch: string;
   tmuxWindow: string;
 }
+
+// Git diff/status types (matches Rust models in nomadflow-core/src/models.rs)
+export type FileChangeStatus = 'modified' | 'new' | 'deleted' | 'renamed' | 'conflicted';
+
+export interface FileChange {
+  path: string;
+  status: FileChangeStatus;
+  additions: number;
+  deletions: number;
+}
+
+export interface StatusSummary {
+  modified: number;
+  new: number;
+  deleted: number;
+  conflicted: number;
+  totalAdditions: number;
+  totalDeletions: number;
+}
+
+export interface WorktreeStatusResponse {
+  worktreePath: string;
+  branch: string;
+  files: FileChange[];
+  summary: StatusSummary;
+}
+
+export interface FileDiffResponse {
+  filePath: string;
+  hunks: DiffHunk[];
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+}
+
+export type DiffLineType = 'context' | 'addition' | 'deletion';
+
+export interface DiffLine {
+  type: DiffLineType;
+  content: string;
+}
+
+export interface FileContentResponse {
+  filePath: string;
+  content: string;
+}
+
+// Re-export session + agent state types
+export type { AgentStateKind, SessionWithState, ListSessionsResponse } from './types/session';

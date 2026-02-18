@@ -17,20 +17,22 @@ import {
 import { useColorScheme, colorScheme as nwColorScheme } from 'nativewind';
 import * as React from 'react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, ScrollView, Alert, Pressable } from 'react-native';
 
 type AiAgent = 'claude' | 'ollama' | 'custom';
 
-const AI_AGENTS: { value: AiAgent; label: string; description: string }[] = [
-  { value: 'claude', label: 'Claude', description: 'Claude CLI (ask-claude)' },
-  { value: 'ollama', label: 'Ollama', description: 'deepseek-coder local' },
-  { value: 'custom', label: 'Autre', description: 'Saisir une commande agent' },
-];
-
 export default function SettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { colorScheme, setColorScheme } = useColorScheme();
   const { settings, updateSettings, clearAllData } = useStorage();
+
+  const AI_AGENTS: { value: AiAgent; label: string; description: string }[] = [
+    { value: 'claude', label: t('settings.ai_agent.claude_label'), description: t('settings.ai_agent.claude_description') },
+    { value: 'ollama', label: t('settings.ai_agent.ollama_label'), description: t('settings.ai_agent.ollama_description') },
+    { value: 'custom', label: t('settings.ai_agent.custom_label'), description: t('settings.ai_agent.custom_description') },
+  ];
 
   const [customCommand, setCustomCommand] = useState(settings.customAgentCommand || '');
   const [fontSize, setFontSize] = useState(settings.fontSize.toString());
@@ -42,17 +44,17 @@ export default function SettingsScreen() {
       fontSize: parseInt(fontSize) || 14,
       tmuxSessionPrefix: tmuxPrefix,
     });
-    Alert.alert('Succès', 'Paramètres enregistrés');
+    Alert.alert(t('common.success'), t('settings.saved'));
   };
 
   const handleClearData = () => {
     Alert.alert(
-      'Effacer toutes les données ?',
-      'Cette action supprimera tous vos serveurs, historique et paramètres. Cette action est irréversible.',
+      t('settings.clear_data.confirm_title'),
+      t('settings.clear_data.confirm_message'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Effacer',
+          text: t('settings.danger_zone.clear_button'),
           style: 'destructive',
           onPress: async () => {
             await clearAllData();
@@ -88,10 +90,10 @@ export default function SettingsScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Paramètres',
+          title: t('settings.title'),
           headerRight: () => (
             <Button variant="ghost" onPress={handleSave}>
-              <Text className="font-semibold text-primary">Enregistrer</Text>
+              <Text className="font-semibold text-primary">{t('common.save')}</Text>
             </Button>
           ),
         }}
@@ -102,16 +104,16 @@ export default function SettingsScreen() {
           <CardHeader>
             <CardTitle className="flex-row items-center gap-2">
               <Icon as={ThemeIcon} size={18} />
-              <Text className="font-semibold">Apparence</Text>
+              <Text className="font-semibold">{t('settings.appearance.title')}</Text>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Pressable
               onPress={cycleTheme}
               className="flex-row items-center justify-between rounded-lg bg-muted p-3">
-              <Text>Thème</Text>
+              <Text>{t('settings.appearance.theme')}</Text>
               <View className="flex-row items-center gap-2">
-                <Text className="capitalize text-muted-foreground">{colorScheme}</Text>
+                <Text className="capitalize text-muted-foreground">{t(`settings.theme.${colorScheme}`)}</Text>
                 <Icon as={ThemeIcon} className="text-primary" size={18} />
               </View>
             </Pressable>
@@ -123,9 +125,9 @@ export default function SettingsScreen() {
           <CardHeader>
             <CardTitle className="flex-row items-center gap-2">
               <Icon as={BotIcon} size={18} />
-              <Text className="font-semibold">Agent IA</Text>
+              <Text className="font-semibold">{t('settings.ai_agent.title')}</Text>
             </CardTitle>
-            <CardDescription>Configure l'assistant IA lancé automatiquement</CardDescription>
+            <CardDescription>{t('settings.ai_agent.description')}</CardDescription>
           </CardHeader>
           <CardContent className="gap-3">
             {AI_AGENTS.map((agent) => (
@@ -147,9 +149,9 @@ export default function SettingsScreen() {
 
             {settings.defaultAiAgent === 'custom' && (
               <View className="mt-2 gap-2">
-                <Label nativeID="customCmd">Commande personnalisée</Label>
+                <Label nativeID="customCmd">{t('settings.ai_agent.custom_command')}</Label>
                 <Input
-                  placeholder="nvim, cursor, etc."
+                  placeholder={t('settings.ai_agent.custom_placeholder')}
                   value={customCommand}
                   onChangeText={setCustomCommand}
                   autoCapitalize="none"
@@ -163,9 +165,9 @@ export default function SettingsScreen() {
               onPress={handleAutoLaunchToggle}
               className="mt-2 flex-row items-center justify-between rounded-lg bg-muted p-3">
               <View>
-                <Text className="font-medium">Lancement automatique</Text>
+                <Text className="font-medium">{t('settings.ai_agent.auto_launch')}</Text>
                 <Text className="text-xs text-muted-foreground">
-                  Lance l'agent IA à l'ouverture du terminal
+                  {t('settings.ai_agent.auto_launch_hint')}
                 </Text>
               </View>
               <View
@@ -181,12 +183,12 @@ export default function SettingsScreen() {
         {/* Terminal */}
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle>Terminal</CardTitle>
-            <CardDescription>Paramètres du terminal</CardDescription>
+            <CardTitle>{t('settings.terminal.title')}</CardTitle>
+            <CardDescription>{t('settings.terminal.description')}</CardDescription>
           </CardHeader>
           <CardContent className="gap-4">
             <View className="gap-2">
-              <Label nativeID="fontSize">Taille de police</Label>
+              <Label nativeID="fontSize">{t('settings.terminal.font_size')}</Label>
               <Input
                 placeholder="14"
                 value={fontSize}
@@ -197,7 +199,7 @@ export default function SettingsScreen() {
             </View>
 
             <View className="gap-2">
-              <Label nativeID="tmuxPrefix">Préfixe session tmux</Label>
+              <Label nativeID="tmuxPrefix">{t('settings.terminal.tmux_prefix')}</Label>
               <Input
                 placeholder="nomadflow"
                 value={tmuxPrefix}
@@ -212,9 +214,9 @@ export default function SettingsScreen() {
               onPress={handleAutoReconnectToggle}
               className="flex-row items-center justify-between rounded-lg bg-muted p-3">
               <View>
-                <Text className="font-medium">Reconnexion automatique</Text>
+                <Text className="font-medium">{t('settings.terminal.auto_reconnect')}</Text>
                 <Text className="text-xs text-muted-foreground">
-                  Reconnecte automatiquement en cas de déconnexion
+                  {t('settings.terminal.auto_reconnect_hint')}
                 </Text>
               </View>
               <View
@@ -232,13 +234,13 @@ export default function SettingsScreen() {
           <CardHeader>
             <CardTitle className="flex-row items-center gap-2">
               <Icon as={InfoIcon} size={18} />
-              <Text className="font-semibold">À propos</Text>
+              <Text className="font-semibold">{t('settings.about.title')}</Text>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Text className="text-muted-foreground">
               NomadFlow v1.0.0{'\n'}
-              Terminal mobile résilient avec assistant IA
+              {t('settings.about.description')}
             </Text>
           </CardContent>
         </Card>
@@ -248,13 +250,13 @@ export default function SettingsScreen() {
           <CardHeader>
             <CardTitle className="flex-row items-center gap-2 text-destructive">
               <Icon as={TrashIcon} className="text-destructive" size={18} />
-              <Text className="font-semibold text-destructive">Zone dangereuse</Text>
+              <Text className="font-semibold text-destructive">{t('settings.danger_zone.title')}</Text>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Button variant="destructive" onPress={handleClearData}>
               <Icon as={TrashIcon} className="mr-2" size={18} />
-              <Text>Effacer toutes les données</Text>
+              <Text>{t('settings.danger_zone.clear_button')}</Text>
             </Button>
           </CardContent>
         </Card>

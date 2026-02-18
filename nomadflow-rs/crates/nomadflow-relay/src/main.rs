@@ -64,7 +64,10 @@ const MAX_TUNNELS_PER_IP: usize = 3;
 const MAX_REGISTRATIONS_PER_HOUR: usize = 10;
 
 /// Extract client IP from X-Forwarded-For (set by Caddy) with fallback to ConnectInfo.
-fn extract_client_ip(headers: &axum::http::HeaderMap, connect_info: &ConnectInfo<SocketAddr>) -> IpAddr {
+fn extract_client_ip(
+    headers: &axum::http::HeaderMap,
+    connect_info: &ConnectInfo<SocketAddr>,
+) -> IpAddr {
     headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -429,7 +432,9 @@ async fn cleanup_stale_tunnels(state: Arc<RelayState>) {
 
         // Cleanup stale tunnels based on last usage (not creation time)
         let before = state.tunnels.len();
-        state.tunnels.retain(|_, entry| entry.last_used.elapsed() < ttl);
+        state
+            .tunnels
+            .retain(|_, entry| entry.last_used.elapsed() < ttl);
         let removed = before - state.tunnels.len();
         if removed > 0 {
             info!(removed, "Cleaned up stale tunnel entries");
@@ -458,8 +463,7 @@ async fn main() -> color_eyre::Result<()> {
         .init();
 
     let relay_secret = std::env::var("RELAY_SECRET").unwrap_or_default();
-    let bore_host =
-        std::env::var("BORE_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let bore_host = std::env::var("BORE_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = std::env::var("RELAY_PORT")
         .ok()
         .and_then(|p| p.parse().ok())

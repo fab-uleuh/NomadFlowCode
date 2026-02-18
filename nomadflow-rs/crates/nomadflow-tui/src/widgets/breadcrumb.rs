@@ -1,7 +1,4 @@
-use ratatui::{
-    prelude::*,
-    widgets::Paragraph,
-};
+use ratatui::{prelude::*, widgets::Paragraph};
 
 pub fn render(
     frame: &mut Frame,
@@ -10,10 +7,7 @@ pub fn render(
     repo: Option<&str>,
     feature: Option<&str>,
 ) {
-    let parts: Vec<&str> = [server, repo, feature]
-        .iter()
-        .filter_map(|x| *x)
-        .collect();
+    let parts: Vec<&str> = [server, repo, feature].iter().filter_map(|x| *x).collect();
 
     if parts.is_empty() {
         return;

@@ -1,5 +1,8 @@
 import type { Server, Feature } from '@shared';
 
+// Re-export session types
+export type { AgentStateKind, SessionWithState, ListSessionsResponse } from './session';
+
 // Navigation types for expo-router
 export type RootStackParamList = {
   index: undefined;
@@ -45,7 +48,7 @@ export interface TerminalMessage {
 
 // Command types for server scripts
 export interface ServerCommand {
-  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo' | 'list-branches' | 'attach-branch';
+  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo' | 'list-branches' | 'attach-branch' | 'create-session' | 'close-session' | 'select-session' | 'worktree-status' | 'file-diff' | 'file-content' | 'list-sessions';
   params?: Record<string, string>;
 }
 
@@ -60,6 +63,7 @@ export interface SwitchFeatureParams {
   featureName: string;
   launchAgent?: boolean;
   agentCommand?: string;
+  linkedSession?: string;
 }
 
 export interface TerminalShortcut {

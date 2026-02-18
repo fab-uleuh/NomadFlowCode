@@ -1,4 +1,5 @@
 import '@/global.css';
+import '@/lib/i18n';
 
 import { NAV_THEME, THEME } from '@/lib/theme';
 import { StorageProvider } from '@/lib/context/storage-context';
@@ -18,12 +19,14 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export { ErrorBoundary } from 'expo-router';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const { t } = useTranslation();
   const { colorScheme } = useColorScheme();
 
   const [fontsLoaded] = useFonts({
@@ -113,27 +116,27 @@ export default function RootLayout() {
           <Stack.Screen
             name="index"
             options={{
-              title: 'Serveurs',
+              title: t('servers.title'),
               headerLargeTitle: true,
             }}
           />
           <Stack.Screen
             name="add-server"
             options={{
-              title: 'Nouveau Serveur',
+              title: t('servers.add.title'),
               presentation: 'modal',
             }}
           />
           <Stack.Screen
             name="repos"
             options={{
-              title: 'Repositories',
+              title: t('repos.title'),
             }}
           />
           <Stack.Screen
             name="features"
             options={{
-              title: 'Features',
+              title: t('features.title'),
             }}
           />
           <Stack.Screen
@@ -146,7 +149,7 @@ export default function RootLayout() {
           <Stack.Screen
             name="settings"
             options={{
-              title: 'Paramètres',
+              title: t('settings.title'),
               presentation: 'modal',
             }}
           />

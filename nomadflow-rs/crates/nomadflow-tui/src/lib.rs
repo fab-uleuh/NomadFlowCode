@@ -52,6 +52,11 @@ pub async fn run_tui(settings: Settings) -> Result<Option<String>> {
     restore_terminal(&mut terminal)?;
 
     match result {
+        Ok(AppResult::AttachWindow(session, window)) => {
+            // Attach directly to a specific window (from SessionPicker)
+            tmux_local::attach_session_target(&session, Some(&window));
+            Ok(None)
+        }
         Ok(AppResult::Attach(session)) => Ok(Some(session)),
         Ok(AppResult::Quit) => Ok(None),
         Err(e) => Err(e),
@@ -78,11 +83,32 @@ pub fn run_status(settings: &Settings) {
         let idle = tmux_local::is_shell_idle_str(cmd.as_deref());
         let status = match &cmd {
             Some(_) if idle => "idle".to_string(),
-            Some(c) => format!("● {c}"),
+            Some(c) => format!("\u{25cf} {c}"),
             None => String::new(),
         };
         let marker = if w.active { ">" } else { " " };
         println!("{marker} {}: {}  {status}", w.index, w.name);
+    }
+
+    // Session summary
+    let sessions = tmux_local::list_sessions(session);
+    println!();
+    if sessions.is_empty() {
+        println!("Sessions: none (use 'nomadflow run' to create)");
+    } else {
+        println!("Sessions: {} active", sessions.len());
+        for s in &sessions {
+            let idle = tmux_local::is_shell_idle_str(s.command.as_deref());
+            let status = if idle {
+                "(idle)".to_string()
+            } else {
+                match &s.command {
+                    Some(cmd) => format!("(running: {})", cmd.lines().next().unwrap_or(cmd)),
+                    None => "(idle)".to_string(),
+                }
+            };
+            println!("  {}  {status}", s.window_name);
+        }
     }
 }
 
@@ -136,8 +162,7 @@ pub fn pick_from_list(title: &str, items: &[PickItem]) -> Result<Option<usize>> 
                 ])
                 .split(area);
 
-            let title_w = Paragraph::new(title)
-                .style(Style::default().fg(Color::Cyan).bold());
+            let title_w = Paragraph::new(title).style(Style::default().fg(Color::Cyan).bold());
             f.render_widget(title_w, chunks[0]);
 
             let visible_height = chunks[1].height as usize;

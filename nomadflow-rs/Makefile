@@ -4,7 +4,7 @@ VPS := $(VPS_HOST)
 RELAY_DIR := /home/ubuntu/nomadflow-relay
 RELAY_SRC := crates/nomadflow-relay
 
-.PHONY: relay-deploy relay-logs relay-restart relay-status
+.PHONY: relay-deploy relay-logs relay-restart relay-status web-build build
 
 ## Deploy relay to VPS (rsync source + rebuild + restart)
 relay-deploy:
@@ -24,3 +24,11 @@ relay-restart:
 ## Show relay + bore container status
 relay-status:
 	ssh $(VPS) "docker ps --filter 'name=nomadflow' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+
+## Build web dashboard (Expo static export → nomadflowcode/dist/)
+web-build:
+	cd ../nomadflowcode && pnpm install && npx expo export --platform web
+
+## Build everything (web export + Rust binary with embedded dashboard)
+build: web-build
+	cargo build --release

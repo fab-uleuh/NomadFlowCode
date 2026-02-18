@@ -5,10 +5,7 @@ use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 use tracing::info;
 
 /// Bridge bidirectional messages between an axum WebSocket and a tungstenite WebSocket.
-pub async fn bridge(
-    client: WebSocket,
-    upstream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-) {
+pub async fn bridge(client: WebSocket, upstream: WebSocketStream<MaybeTlsStream<TcpStream>>) {
     let (mut client_tx, mut client_rx) = client.split();
     let (mut upstream_tx, mut upstream_rx) = upstream.split();
 
@@ -60,6 +57,7 @@ pub async fn bridge(
                         break;
                     }
                 }
+                // Pings are handled automatically by tungstenite at the protocol level
                 Ok(tungstenite::Message::Close(_)) | Err(_) => break,
                 _ => {}
             }

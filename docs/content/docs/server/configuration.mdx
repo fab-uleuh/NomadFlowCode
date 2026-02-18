@@ -8,6 +8,8 @@ NomadFlowCode reads its configuration from `~/.nomadflowcode/config.toml`. All f
 ## Full example
 
 ```toml
+version = 1
+
 [paths]
 base_dir = "~/.nomadflowcode"
 
@@ -21,6 +23,9 @@ port = 7681
 port = 8080
 host = "0.0.0.0"
 
+[web]
+port = 3000
+
 [auth]
 secret = "my-secret-token"
 
@@ -29,6 +34,12 @@ subdomain = "fabien"
 ```
 
 ## Reference
+
+### `version`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `version` | integer | `1` | Config file format version. Used for future migrations. Old config files without this field are detected as version `0`. |
 
 ### `[paths]`
 
@@ -58,6 +69,16 @@ The following subdirectories are created automatically:
 |-----|------|---------|-------------|
 | `port` | integer | `8080` | Port for the HTTP API server. |
 | `host` | string | `0.0.0.0` | Bind address for the API server. |
+
+Both can be overridden at runtime with `nomadflow serve --port <port>` and `nomadflow serve --host <host>`.
+
+### `[web]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `port` | integer | `3000` | Port for the web dashboard server (`nomadflow web`). |
+
+Can be overridden at runtime with `nomadflow web --port <port>`.
 
 ### `[auth]`
 

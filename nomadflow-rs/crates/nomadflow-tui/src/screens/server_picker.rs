@@ -17,8 +17,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .constraints([Constraint::Length(2), Constraint::Min(1)])
         .split(area);
 
-    let title = Paragraph::new("Select a server:")
-        .style(Style::default().bold());
+    let title = Paragraph::new("Select a server:").style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
     let mut items: Vec<ListItem> = app

@@ -6,10 +6,12 @@ import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 
 export default function AddServerScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ serverId?: string; url?: string; secret?: string }>();
   const { addServer, updateServer, getServer } = useStorage();
@@ -18,6 +20,7 @@ export default function AddServerScreen() {
   const [apiUrl, setApiUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasPreFilled = useRef(false);
 
   const isEditing = !!params.serverId;
   const existingServer = params.serverId ? getServer(params.serverId) : undefined;
@@ -31,29 +34,31 @@ export default function AddServerScreen() {
   }, [existingServer]);
 
   // Pre-fill from deep link: nomadflowcode://add-server?url=...&secret=...
+  // Only pre-fill once to avoid overwriting user edits on re-render
   useEffect(() => {
-    if (params.url && !isEditing) {
+    if (params.url && !isEditing && !hasPreFilled.current) {
+      hasPreFilled.current = true;
       setApiUrl(params.url);
       if (params.secret) setAuthToken(params.secret);
       // Auto-generate a name from the URL hostname (string ops, no new URL())
       const match = params.url.match(/^https?:\/\/([^:/]+)/);
       if (match) setName(match[1].split('.')[0]);
     }
-  }, [params.url, params.secret]);
+  }, [params.url, params.secret, isEditing]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un nom pour le serveur');
+      Alert.alert(t('common.error'), t('servers.add.error.name_required'));
       return;
     }
 
     if (!apiUrl.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer une URL API');
+      Alert.alert(t('common.error'), t('servers.add.error.url_required'));
       return;
     }
 
     if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
-      Alert.alert('Erreur', "L'URL API doit commencer par http:// ou https://");
+      Alert.alert(t('common.error'), t('servers.add.error.url_invalid_protocol'));
       return;
     }
 
@@ -73,7 +78,7 @@ export default function AddServerScreen() {
       }
       router.replace('/');
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder le serveur');
+      Alert.alert(t('common.error'), t('servers.add.error.save_failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -83,11 +88,11 @@ export default function AddServerScreen() {
     <>
       <Stack.Screen
         options={{
-          title: isEditing ? 'Modifier le serveur' : 'Nouveau serveur',
+          title: isEditing ? t('servers.edit.title') : t('servers.add.title'),
           headerRight: () => (
             <Button variant="ghost" onPress={handleSubmit} disabled={isSubmitting}>
               <Text className="text-primary font-semibold">
-                {isSubmitting ? 'Enregistrement...' : isEditing ? 'Mettre à jour' : 'Enregistrer'}
+                {isSubmitting ? t('common.saving') : isEditing ? t('common.update') : t('common.save')}
               </Text>
             </Button>
           ),
@@ -99,13 +104,13 @@ export default function AddServerScreen() {
         <ScrollView className="flex-1 p-4" keyboardShouldPersistTaps="handled">
           <Card>
             <CardHeader>
-              <CardTitle>Configuration du serveur</CardTitle>
+              <CardTitle>{t('servers.add.section_title')}</CardTitle>
             </CardHeader>
             <CardContent className="gap-4">
               <View className="gap-2">
-                <Label nativeID="name">Nom du serveur</Label>
+                <Label nativeID="name">{t('servers.add.label.name')}</Label>
                 <Input
-                  placeholder="Mon serveur de dev"
+                  placeholder={t('servers.add.placeholder.name')}
                   value={name}
                   onChangeText={setName}
                   autoCapitalize="words"
@@ -114,7 +119,7 @@ export default function AddServerScreen() {
               </View>
 
               <View className="gap-2">
-                <Label nativeID="apiUrl">URL API</Label>
+                <Label nativeID="apiUrl">{t('servers.add.label.url')}</Label>
                 <Input
                   placeholder="http://192.168.1.100:8080"
                   value={apiUrl}
@@ -125,14 +130,14 @@ export default function AddServerScreen() {
                   aria-labelledby="apiUrl"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  L'URL de l'API NomadFlow (port 8080 par défaut).
+                  {t('servers.add.hint.url')}
                 </Text>
               </View>
 
               <View className="gap-2">
-                <Label nativeID="token">Secret d'authentification (optionnel)</Label>
+                <Label nativeID="token">{t('servers.add.label.secret')}</Label>
                 <Input
-                  placeholder="Secret partagé"
+                  placeholder={t('servers.add.placeholder.secret')}
                   value={authToken}
                   onChangeText={setAuthToken}
                   autoCapitalize="none"
@@ -141,7 +146,7 @@ export default function AddServerScreen() {
                   aria-labelledby="token"
                 />
                 <Text className="text-xs text-muted-foreground">
-                  Ce secret protège l'API et le terminal. Doit correspondre au secret dans config.toml du serveur.
+                  {t('servers.add.hint.secret')}
                 </Text>
               </View>
             </CardContent>
@@ -149,11 +154,11 @@ export default function AddServerScreen() {
 
           <View className="mt-6 gap-3">
             <Button onPress={handleSubmit} disabled={isSubmitting}>
-              <Text>{isSubmitting ? 'Enregistrement...' : isEditing ? 'Mettre à jour' : 'Ajouter le serveur'}</Text>
+              <Text>{isSubmitting ? t('common.saving') : isEditing ? t('common.update') : t('servers.add.submit')}</Text>
             </Button>
 
-            <Button variant="outline" onPress={() => router.back()}>
-              <Text>Annuler</Text>
+            <Button variant="outline" onPress={() => router.canGoBack() ? router.back() : router.replace('/')}>
+              <Text>{t('common.cancel')}</Text>
             </Button>
           </View>
         </ScrollView>

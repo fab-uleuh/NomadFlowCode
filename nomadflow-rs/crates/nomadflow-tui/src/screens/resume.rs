@@ -23,11 +23,14 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Length(1), Constraint::Min(1)])
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
         .split(area);
 
-    let title = Paragraph::new("Resume previous session?")
-        .style(Style::default().bold());
+    let title = Paragraph::new("Resume previous session?").style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
     let info = Paragraph::new(Line::from(vec![
@@ -39,10 +42,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(info, chunks[1]);
 
-    let options = [
-        "Yes, attach tmux session",
-        "No, choose another session",
-    ];
+    let options = ["Yes, attach tmux session", "No, choose another session"];
 
     let items: Vec<ListItem> = options
         .iter()

@@ -1,5 +1,25 @@
 use qrcode::QrCode;
 
+/// Open a URL in the default browser (best-effort, never fails).
+pub fn open_browser(url: &str) {
+    let _result = {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open").arg(url).spawn()
+        }
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open").arg(url).spawn()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", url])
+                .spawn()
+        }
+    };
+}
+
 /// Render a QR code as a compact Unicode string using half-block characters.
 /// Each character represents two vertical modules, giving a compact output.
 fn render_qr_unicode(code: &QrCode) -> String {
@@ -62,7 +82,11 @@ pub fn print_connection_info(connect_url: &str, secret: &str, public: bool) {
     };
 
     let qr_lines: Vec<&str> = qr_block.lines().collect();
-    let qr_width = qr_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    let qr_width = qr_lines
+        .iter()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0);
 
     // Compute box width: at least as wide as QR + some padding, or URL line
     let url_line = format!("  URL      : {connect_url}");

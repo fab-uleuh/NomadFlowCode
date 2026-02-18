@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use serde_json::{json, Value};
 
 use nomadflow_core::models::{
@@ -77,6 +72,12 @@ async fn create_feature(
                 Json(json!({ "detail": e.to_string() })),
             )
         })?;
+
+    // Inject hooks so Claude Code state tracking works in the new worktree
+    let wt_path = std::path::Path::new(&worktree_path);
+    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
+        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on create: {e}");
+    }
 
     Ok(Json(CreateFeatureResponse {
         worktree_path,
@@ -174,7 +175,7 @@ async fn switch_feature(
     let win_name = window_name(&request.repo_path, &request.feature_name);
     let (switched, has_running_process) = state
         .tmux
-        .switch_to_window(&win_name, Some(&worktree_path))
+        .switch_to_window(&win_name, Some(&worktree_path), request.linked_session.as_deref())
         .await
         .map_err(|e| {
             (
@@ -190,6 +191,12 @@ async fn switch_feature(
         ));
     }
 
+    // Inject hooks into the worktree so Claude Code state tracking works
+    let wt_path = std::path::Path::new(&worktree_path);
+    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
+        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on switch: {e}");
+    }
+
     Ok(Json(SwitchFeatureResponse {
         switched: true,
         worktree_path,
@@ -202,16 +209,17 @@ async fn list_branches(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ListBranchesRequest>,
 ) -> Result<Json<ListBranchesResponse>, (StatusCode, Json<Value>)> {
-    let (branches, default_branch) = state
-        .git
-        .list_branches(&request.repo_path)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "detail": e.to_string() })),
-            )
-        })?;
+    let (branches, default_branch) =
+        state
+            .git
+            .list_branches(&request.repo_path)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "detail": e.to_string() })),
+                )
+            })?;
 
     Ok(Json(ListBranchesResponse {
         branches,
@@ -259,6 +267,12 @@ async fn attach_branch(
                 Json(json!({ "detail": e.to_string() })),
             )
         })?;
+
+    // Inject hooks so Claude Code state tracking works in the attached worktree
+    let wt_path = std::path::Path::new(&worktree_path);
+    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
+        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on attach: {e}");
+    }
 
     Ok(Json(AttachBranchResponse {
         worktree_path,

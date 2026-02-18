@@ -16,11 +16,7 @@ impl CommandResult {
 }
 
 /// Run a shell command asynchronously with a timeout.
-pub async fn run_command(
-    command: &str,
-    cwd: Option<&str>,
-    timeout_secs: f64,
-) -> CommandResult {
+pub async fn run_command(command: &str, cwd: Option<&str>, timeout_secs: f64) -> CommandResult {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(command);
 
@@ -31,16 +27,13 @@ pub async fn run_command(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let result = tokio::time::timeout(
-        Duration::from_secs_f64(timeout_secs),
-        async {
-            let child = cmd.spawn();
-            match child {
-                Ok(child) => child.wait_with_output().await,
-                Err(e) => Err(e),
-            }
-        },
-    )
+    let result = tokio::time::timeout(Duration::from_secs_f64(timeout_secs), async {
+        let child = cmd.spawn();
+        match child {
+            Ok(child) => child.wait_with_output().await,
+            Err(e) => Err(e),
+        }
+    })
     .await;
 
     match result {

@@ -1,7 +1,4 @@
-use ratatui::{
-    prelude::*,
-    widgets::Paragraph,
-};
+use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::app::App;
 
@@ -30,18 +27,15 @@ fn render_password_choice(frame: &mut Frame, area: Rect, app: &App) {
         ])
         .split(area);
 
-    let title = Paragraph::new("Welcome to NomadFlow!")
-        .style(Style::default().fg(Color::Cyan).bold());
+    let title =
+        Paragraph::new("Welcome to NomadFlow!").style(Style::default().fg(Color::Cyan).bold());
     frame.render_widget(title, chunks[0]);
 
-    let label = Paragraph::new("Set a password to secure your server:")
-        .style(Style::default().bold());
+    let label =
+        Paragraph::new("Set a password to secure your server:").style(Style::default().bold());
     frame.render_widget(label, chunks[1]);
 
-    let options = [
-        "Generate a password (recommended)",
-        "Enter my own password",
-    ];
+    let options = ["Generate a password (recommended)", "Enter my own password"];
 
     for (i, opt) in options.iter().enumerate() {
         let style = if app.selected_index == i {
@@ -59,10 +53,7 @@ fn render_password_choice(frame: &mut Frame, area: Rect, app: &App) {
 fn render_password_input(frame: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Length(2), Constraint::Length(1)])
         .split(area);
 
     let title = Paragraph::new("Enter your password:").style(Style::default().bold());
@@ -75,10 +66,7 @@ fn render_password_input(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("my-secret", Style::default().fg(Color::DarkGray)),
         ])
     } else {
-        Line::from(vec![
-            Span::raw(label),
-            Span::raw(&app.input_text),
-        ])
+        Line::from(vec![Span::raw(label), Span::raw(&app.input_text)])
     };
 
     let input = Paragraph::new(input_display);
@@ -100,8 +88,8 @@ fn render_public_choice(frame: &mut Frame, area: Rect, _app: &App) {
         ])
         .split(area);
 
-    let title = Paragraph::new("Will you use public tunnel mode? (y/n)")
-        .style(Style::default().bold());
+    let title =
+        Paragraph::new("Will you use public tunnel mode? (y/n)").style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
     let hint = Paragraph::new("This exposes your server over the internet via a tunnel URL.")
@@ -135,16 +123,15 @@ fn render_subdomain_input(frame: &mut Frame, area: Rect, app: &App) {
 
     let sub_line = Paragraph::new(Line::from(vec![
         Span::raw("  Your subdomain: "),
-        Span::styled(&app.setup_subdomain, Style::default().fg(Color::Cyan).bold()),
+        Span::styled(
+            &app.setup_subdomain,
+            Style::default().fg(Color::Cyan).bold(),
+        ),
     ]));
     frame.render_widget(sub_line, chunks[1]);
 
-    let url_preview = format!(
-        "  -> https://{}.tunnel.{base_domain}",
-        app.setup_subdomain
-    );
-    let url_line =
-        Paragraph::new(url_preview).style(Style::default().fg(Color::DarkGray));
+    let url_preview = format!("  -> https://{}.tunnel.{base_domain}", app.setup_subdomain);
+    let url_line = Paragraph::new(url_preview).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(url_line, chunks[2]);
 
     let hint = Paragraph::new("y: use this fixed subdomain  n: random URL each time")
@@ -166,8 +153,8 @@ fn render_confirm(frame: &mut Frame, area: Rect, app: &App) {
         ])
         .split(area);
 
-    let title = Paragraph::new("Configuration summary:")
-        .style(Style::default().fg(Color::Cyan).bold());
+    let title =
+        Paragraph::new("Configuration summary:").style(Style::default().fg(Color::Cyan).bold());
     frame.render_widget(title, chunks[0]);
 
     let password_line = Paragraph::new(Line::from(vec![

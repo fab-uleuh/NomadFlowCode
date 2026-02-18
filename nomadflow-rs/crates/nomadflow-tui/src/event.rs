@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 
-use nomadflow_core::models::{Feature, Repository};
+use nomadflow_core::models::{AgentStateKind, Feature, Repository};
 
 /// Application events combining terminal events and async results.
 #[derive(Debug)]
@@ -21,6 +21,8 @@ pub enum AppEvent {
     SwitchDone(Result<String, String>),
     /// Health check result for a server.
     HealthResult(String, bool),
+    /// Agent state refresh results: (window_name, state) pairs.
+    AgentStatesRefreshed(Vec<(String, AgentStateKind)>),
 }
 
 /// Poll for crossterm events with a timeout.

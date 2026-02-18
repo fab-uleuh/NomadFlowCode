@@ -89,15 +89,48 @@ impl Default for TunnelConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WebConfig {
+    pub port: u16,
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self { port: 3000 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// Config file format version (for future migrations).
+    /// Field-level `#[serde(default)]` ensures old configs without `version` get 0 (not 1),
+    /// so we can detect and migrate them.
+    #[serde(default)]
+    pub version: u32,
     pub paths: PathsConfig,
     pub tmux: TmuxConfig,
     pub ttyd: TtydConfig,
     pub api: ApiConfig,
     pub auth: AuthConfig,
     pub tunnel: TunnelConfig,
+    pub web: WebConfig,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            paths: PathsConfig::default(),
+            tmux: TmuxConfig::default(),
+            ttyd: TtydConfig::default(),
+            api: ApiConfig::default(),
+            auth: AuthConfig::default(),
+            tunnel: TunnelConfig::default(),
+            web: WebConfig::default(),
+        }
+    }
 }
 
 impl Settings {
@@ -124,6 +157,11 @@ impl Settings {
     /// Worktrees directory.
     pub fn worktrees_dir(&self) -> PathBuf {
         self.base_dir().join("worktrees")
+    }
+
+    /// Sessions directory.
+    pub fn sessions_dir(&self) -> PathBuf {
+        self.base_dir().join("sessions")
     }
 
     /// Default config file path (static, always the default location).
@@ -178,6 +216,7 @@ impl Settings {
         std::fs::create_dir_all(self.base_dir())?;
         std::fs::create_dir_all(self.repos_dir())?;
         std::fs::create_dir_all(self.worktrees_dir())?;
+        std::fs::create_dir_all(self.sessions_dir())?;
         Ok(())
     }
 }
@@ -190,6 +229,8 @@ mod tests {
     #[test]
     fn test_parse_full_toml() {
         let toml_str = r#"
+version = 1
+
 [paths]
 base_dir = "/tmp/nomadtest"
 
@@ -205,25 +246,32 @@ host = "127.0.0.1"
 
 [auth]
 secret = "s3cret"
+
+[web]
+port = 4000
 "#;
         let settings: Settings = toml::from_str(toml_str).unwrap();
+        assert_eq!(settings.version, 1);
         assert_eq!(settings.paths.base_dir, "/tmp/nomadtest");
         assert_eq!(settings.tmux.session, "mytest");
         assert_eq!(settings.ttyd.port, 9999);
         assert_eq!(settings.api.port, 3000);
         assert_eq!(settings.api.host, "127.0.0.1");
         assert_eq!(settings.auth.secret, "s3cret");
+        assert_eq!(settings.web.port, 4000);
     }
 
     #[test]
     fn test_parse_minimal_toml() {
         let toml_str = "";
         let settings: Settings = toml::from_str(toml_str).unwrap();
+        assert_eq!(settings.version, 0); // missing = default u32, detects old configs
         assert_eq!(settings.paths.base_dir, "~/.nomadflowcode");
         assert_eq!(settings.tmux.session, "nomadflow");
         assert_eq!(settings.ttyd.port, 7681);
         assert_eq!(settings.api.port, 8080);
         assert_eq!(settings.auth.secret, "");
+        assert_eq!(settings.web.port, 3000);
     }
 
     #[test]
@@ -284,5 +332,20 @@ secret = "s3cret"
         assert!(base.exists());
         assert!(base.join("repos").exists());
         assert!(base.join("worktrees").exists());
+        assert!(base.join("sessions").exists());
+    }
+
+    #[test]
+    fn test_sessions_dir() {
+        let settings = Settings {
+            paths: PathsConfig {
+                base_dir: "/tmp/nomadtest".to_string(),
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            settings.sessions_dir(),
+            PathBuf::from("/tmp/nomadtest/sessions")
+        );
     }
 }
