@@ -2,6 +2,29 @@ include .env
 
 IMAGE = nomadflow-docs
 
+# ─── Version ──────────────────────────────────────────
+
+.PHONY: bump
+
+## Bump version everywhere (interactive prompt)
+bump:
+	@read -p "New version (e.g. 1.2.0): " VERSION && \
+	if [ -z "$$VERSION" ]; then echo "Aborted."; exit 1; fi && \
+	echo "Updating to $$VERSION..." && \
+	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' nomadflowcode/app.json && \
+	sed -i '' 's/"runtimeVersion": "[0-9]*\.[0-9]*\.[0-9]*"/"runtimeVersion": "'$$VERSION'"/' nomadflowcode/app.json && \
+	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' nomadflowcode/package.json && \
+	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' docs/package.json && \
+	for f in nomadflow-rs/Cargo.toml \
+		nomadflow-rs/crates/nomadflow-core/Cargo.toml \
+		nomadflow-rs/crates/nomadflow-server/Cargo.toml \
+		nomadflow-rs/crates/nomadflow-tui/Cargo.toml \
+		nomadflow-rs/crates/nomadflow-relay/Cargo.toml \
+		nomadflow-rs/crates/nomadflow-ws/Cargo.toml; do \
+		sed -i '' 's/^version = "[0-9]*\.[0-9]*\.[0-9]*"/version = "'$$VERSION'"/' $$f; \
+	done && \
+	echo "Done! All files updated to $$VERSION"
+
 # ─── Docs ──────────────────────────────────────────────
 
 .PHONY: docs-sync docs-build docs-up docs-down docs-logs docs-deploy docs-caddy
