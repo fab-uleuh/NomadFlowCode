@@ -325,7 +325,7 @@ function WebApp() {
   }, [terminalKey]);
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground font-['Inter',_-apple-system,_BlinkMacSystemFont,_'Segoe_UI',_sans-serif]">
+    <div className="flex flex-col h-screen bg-background text-foreground font-sans">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-2">
@@ -599,24 +599,6 @@ function WebApp() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-
-  useEffect(() => {
-    // Load Inter font via CSS
-    const link = document.createElement('link');
-    link.href =
-      'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-    link.onload = () => setFontsLoaded(true);
-    // Fallback in case font loading event doesn't fire
-    setTimeout(() => setFontsLoaded(true), 2000);
-  }, []);
-
-  if (!fontsLoaded) {
-    return null;
-  }
-
   return (
     <StorageProvider>
       <WebApp />
