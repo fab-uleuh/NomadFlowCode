@@ -377,7 +377,9 @@ impl AgentStateService {
             self.read_state(&session.session_id).await
         } else {
             // Try hook-driven state file first (works when Claude Code runs
-            // in a legacy 2-part tmux window with auto-discovered session ID)
+            // in a legacy 2-part tmux window with auto-discovered session ID).
+            // Ignore "done" state from file: the tmux window may have been reused
+            // for a new process, so fall through to live process detection.
             if let Some(state) = self.read_state(&session.session_id).await {
                 if state.state != AgentStateKind::Done {
                     return Some(state);

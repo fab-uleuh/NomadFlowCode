@@ -119,6 +119,8 @@ async fn create_session(
 
     // Inject Claude Code hooks if agent type is claude-code (AC #2)
     if agent_type == "claude-code" {
+        // Ensure hook script exists on disk (idempotent, guards against startup failure)
+        let _ = state.agent_state.ensure_hook_scripts().await;
         let worktree_path = std::path::Path::new(&request.worktree_path);
         if let Err(e) = state
             .agent_state
@@ -239,6 +241,18 @@ async fn close_session(
     }
 
     let closed = state.tmux.kill_window(&window_name).await;
+
+    // Clean up session state directory (agent-state.json, worktree-path)
+    let session_state_dir = state.agent_state.sessions_dir().join(&request.session_id);
+    if session_state_dir.is_dir() {
+        if let Err(e) = tokio::fs::remove_dir_all(&session_state_dir).await {
+            tracing::warn!(
+                "Failed to clean up session state dir for {}: {e}",
+                request.session_id
+            );
+        }
+    }
+
     Ok(Json(CloseSessionResponse { closed }))
 }
 
