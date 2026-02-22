@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Terminal, GitBranch, Server } from 'lucide-react';
 import { InstallCommand } from '@/components/install-command';
 import { TerminalReplay } from '@/components/terminal-replay';
+import { AutoPlayVideo } from '@/components/auto-play-video';
 
 export default function HomePage() {
   return (
@@ -98,15 +99,7 @@ export default function HomePage() {
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 sm:w-20 lg:w-24 h-4 lg:h-5 bg-black rounded-b-xl lg:rounded-b-2xl z-10" />
               {/* Screen */}
               <div className="rounded-[1.5rem] lg:rounded-[2rem] overflow-hidden bg-black">
-                <video
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="w-full h-auto"
-                >
-                  <source src="/demo.mp4" type="video/mp4" />
-                </video>
+                <AutoPlayVideo src="/demo.mp4" poster="/demo-poster.jpg" className="w-full h-auto" />
               </div>
             </div>
           </div>
