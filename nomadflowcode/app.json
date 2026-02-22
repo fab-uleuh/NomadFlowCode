@@ -25,7 +25,7 @@
         }
       },
       "bundleIdentifier": "com.fab-uleuh.nomadflowcode",
-      "buildNumber": "8"
+      "buildNumber": "11"
     },
     "android": {
       "edgeToEdgeEnabled": true,
