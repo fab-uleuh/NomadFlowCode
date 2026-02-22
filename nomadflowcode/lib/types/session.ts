@@ -1,5 +1,6 @@
 export type AgentStateKind =
   | 'waiting_for_input'
+  | 'waiting_for_permission'
   | 'generating'
   | 'idle'
   | 'done'

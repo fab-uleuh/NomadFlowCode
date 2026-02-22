@@ -195,7 +195,7 @@ export function WorktreeDrawerContent({
       </View>
 
       {/* Worktree list */}
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }} nestedScrollEnabled={true}>
         {worktreeGroups.map((group) => (
           <View key={group.name} className="mt-2">
             {/* Worktree header */}
@@ -367,7 +367,7 @@ export function DiffDrawerContent({
       )}
 
       {/* Content */}
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }} nestedScrollEnabled={true}>
         {/* Loading state — skeleton */}
         {loading && (
           <View className="px-4 py-3">

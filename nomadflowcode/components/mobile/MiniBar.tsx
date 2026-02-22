@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Modal,
   PanResponder,
@@ -26,6 +27,7 @@ interface MiniBarProps {
   onSwitchSession: (sessionId: string) => void;
   onSwitchWorktree: (worktreeName: string) => void;
   onCreateSession: (agentType: string) => void;
+  onDestroySession?: (sessionId: string) => void;
 }
 
 export function MiniBar({
@@ -36,11 +38,13 @@ export function MiniBar({
   onSwitchSession,
   onSwitchWorktree,
   onCreateSession,
+  onDestroySession,
 }: MiniBarProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const AGENT_TYPES = [
+    { id: 'shell', label: t('agents.type.shell') },
     { id: 'agent', label: t('agents.type.agent') },
     { id: 'claude', label: t('agents.type.claude_code') },
   ];
@@ -159,6 +163,22 @@ export function MiniBar({
                     <Pressable
                       key={session.sessionId}
                       onPress={() => onSwitchSession(session.sessionId)}
+                      onLongPress={() => {
+                        if (!onDestroySession) return;
+                        Alert.alert(
+                          t('agents.close.confirm_title'),
+                          t('agents.close.confirm_message'),
+                          [
+                            { text: t('agents.close.cancel'), style: 'cancel' },
+                            {
+                              text: t('agents.close.confirm'),
+                              style: 'destructive',
+                              onPress: () => onDestroySession(session.sessionId),
+                            },
+                          ]
+                        );
+                      }}
+                      delayLongPress={500}
                       style={{ minHeight: 44 }}
                       className={cn(
                         'flex-row items-center gap-1 rounded-lg px-3',

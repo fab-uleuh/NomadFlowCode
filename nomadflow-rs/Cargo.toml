@@ -5,6 +5,7 @@ members = [
     "crates/nomadflow-tui",
     "crates/nomadflow-relay",
     "crates/nomadflow-ws",
+    "crates/nomadflow-pty",
 ]
 resolver = "2"
 
@@ -12,7 +13,7 @@ resolver = "2"
 name = "nomadflow"
 version = "1.1.0"
 edition = "2021"
-description = "Git worktree + tmux workflow manager"
+description = "Git worktree + PTY workflow manager"
 license = "MIT"
 repository = "https://github.com/fab-uleuh/NomadFlowCode.git"
 homepage = "https://github.com/fab-uleuh/NomadFlowCode.git"
@@ -25,9 +26,12 @@ path = "src/main.rs"
 nomadflow-core = { path = "crates/nomadflow-core" }
 nomadflow-server = { path = "crates/nomadflow-server" }
 nomadflow-tui = { path = "crates/nomadflow-tui" }
+nomadflow-pty = { path = "crates/nomadflow-pty" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "codec"] }
+futures-util = "0.3"
+crossterm = "0.28"
 color-eyre = "0.6"
 
 # The profile that 'dist' will build with

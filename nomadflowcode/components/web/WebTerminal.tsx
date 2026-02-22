@@ -1,255 +1,192 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useTranslation } from 'react-i18next';
-import { switchToFeature, executeServerCommand } from '@/lib/server-commands';
 import { useStorage } from '@/lib/context/storage-context';
+import { useTerminalWs } from '@/lib/hooks/useTerminalWs';
+import type { PaneCallbacks } from '@/lib/hooks/useTerminalWs';
 import { ShortcutBar } from './ShortcutBar';
-import type { Server } from '@shared';
-import type { ConnectionState } from '@/lib/types';
+import type { PaneInfoDto } from '@/lib/terminal-ws';
 
 export interface WebTerminalHandle {
   selectSession: (sessionId: string) => Promise<void>;
   sendInput: (data: string) => void;
+  paneId?: number;
+}
+
+/** Extract repo name from a full path. */
+function repoName(repoPath: string): string {
+  return repoPath.split('/').filter(Boolean).pop() || repoPath;
 }
 
 interface WebTerminalProps {
-  server: Server;
   repoPath: string;
   featureName: string;
+  worktreePath?: string;
+  agentType?: string;
   sessionId?: string;
   onReady?: () => void;
   hideShortcutBar?: boolean;
-  onConnectionStateChange?: (state: ConnectionState) => void;
+  onConnectionStateChange?: (state: import('@/lib/types').ConnectionState) => void;
   onToggleDiff?: () => void;
-}
-
-/** Derive the WS URL from the server config or current page origin. */
-function buildWsUrl(server: Server): string {
-  // If apiUrl matches current origin or is empty, use page origin (same-origin WS)
-  const origin =
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
-  let baseUrl = (server.apiUrl || origin).replace(/\/+$/, '');
-
-  // Strip /api suffix if present (WS route is /terminal/ws, not /api/terminal/ws)
-  baseUrl = baseUrl.replace(/\/api$/, '');
-
-  const wsScheme = baseUrl.startsWith('https') ? 'wss' : 'ws';
-  const host = baseUrl.replace(/^https?:\/\//, '');
-  let wsUrl = `${wsScheme}://${host}/terminal/ws`;
-  if (server.authToken) {
-    wsUrl += `?token=${encodeURIComponent(server.authToken)}`;
-  }
-  return wsUrl;
-}
-
-/** Send a command through the WS using ttyd binary protocol (0x30 = input). */
-function sendWsInput(ws: WebSocket, data: string) {
-  const encoder = new TextEncoder();
-  const encoded = encoder.encode(data);
-  const bytes = new Uint8Array(encoded.length + 1);
-  bytes[0] = 0x30; // '0' = input
-  bytes.set(encoded, 1);
-  ws.send(bytes);
-}
-
-/** Call the server API to select a tmux window by session ID. */
-async function selectSessionViaApi(
-  server: Server,
-  sessionId: string,
-  linkedSession?: string | null
-): Promise<boolean> {
-  try {
-    const params: Record<string, string> = { sessionId };
-    if (linkedSession) params.linkedSession = linkedSession;
-    const result = await executeServerCommand(server, {
-      action: 'select-session',
-      params,
-    });
-    if (result.success) {
-      console.log('[WebTerminal] select-session OK for:', sessionId);
-      return true;
-    }
-    console.warn('[WebTerminal] select-session failed:', result.error);
-    return false;
-  } catch (err) {
-    console.warn('[WebTerminal] select-session error:', err);
-    return false;
-  }
+  /** Called when a subscribed pane is destroyed server-side (allows parent to update UI). */
+  onPaneDestroyed?: () => void;
+  /** If true, destroyPane on unmount (used when closing a pane, not just switching). */
+  destroyOnUnmount?: boolean;
 }
 
 export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
-  ({ server, repoPath, featureName, sessionId: sessionIdProp, onReady, hideShortcutBar, onConnectionStateChange, onToggleDiff }, ref) => {
+  ({ repoPath, featureName, worktreePath, agentType = 'claude', sessionId: _sessionIdProp, onReady, hideShortcutBar, onConnectionStateChange, onToggleDiff, onPaneDestroyed, destroyOnUnmount }, ref) => {
     const { t } = useTranslation();
-    const { settings, updateServer } = useStorage();
+    const { settings } = useStorage();
+    const ws = useTerminalWs();
     const terminalRef = useRef<HTMLDivElement>(null);
     const termRef = useRef<any>(null);
-    const wsRef = useRef<WebSocket | null>(null);
     const fitAddonRef = useRef<any>(null);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const reconnectAttemptsRef = useRef(0);
-    const hasRunningProcessRef = useRef(false);
-    const wsClosedIntentionallyRef = useRef(false);
-    const sessionIdRef = useRef<string | undefined>(sessionIdProp);
-    const linkedSessionRef = useRef<string | null>(null);
+    const activePaneIdRef = useRef<number | undefined>(undefined);
     const tRef = useRef(t);
     const onReadyRef = useRef(onReady);
     const onConnectionStateChangeRef = useRef(onConnectionStateChange);
     const repoPathRef = useRef(repoPath);
     const featureNameRef = useRef(featureName);
+    const worktreePathRef = useRef(worktreePath || repoPath);
+    const agentTypeRef = useRef(agentType);
+    const onPaneDestroyedRef = useRef(onPaneDestroyed);
+    const destroyOnUnmountRef = useRef(destroyOnUnmount ?? false);
+    const settingsRef = useRef(settings);
+    const [termReady, setTermReady] = useState(false);
+    const initialPaneCreatedRef = useRef(false);
+    const prevConnectionStatusRef = useRef(ws.connectionState.status);
+    const resetPendingRef = useRef(false);
 
-    // Keep refs in sync with props — but do NOT trigger re-init
+    useEffect(() => { tRef.current = t; }, [t]);
+    useEffect(() => { settingsRef.current = settings; }, [settings]);
+    useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+    useEffect(() => { onConnectionStateChangeRef.current = onConnectionStateChange; }, [onConnectionStateChange]);
+    useEffect(() => { repoPathRef.current = repoPath; }, [repoPath]);
+    useEffect(() => { featureNameRef.current = featureName; }, [featureName]);
+    useEffect(() => { worktreePathRef.current = worktreePath || repoPath; }, [worktreePath, repoPath]);
+    useEffect(() => { agentTypeRef.current = agentType; }, [agentType]);
+    useEffect(() => { onPaneDestroyedRef.current = onPaneDestroyed; }, [onPaneDestroyed]);
+    useEffect(() => { destroyOnUnmountRef.current = destroyOnUnmount ?? false; }, [destroyOnUnmount]);
+
+    // Forward WS connection state to parent
     useEffect(() => {
-      sessionIdRef.current = sessionIdProp;
-    }, [sessionIdProp]);
+      onConnectionStateChangeRef.current?.(ws.connectionState);
+    }, [ws.connectionState]);
 
+    // Reset xterm on reconnection to prevent display corruption (AC #3)
+    // Fires before the provider's re-subscribe effect (child effects run first),
+    // so terminal.reset() happens before the server sends BufferSnapshot.
     useEffect(() => {
-      tRef.current = t;
-    }, [t]);
+      const prevStatus = prevConnectionStatusRef.current;
+      const currentStatus = ws.connectionState.status;
+      prevConnectionStatusRef.current = currentStatus;
 
-    useEffect(() => {
-      onReadyRef.current = onReady;
-    }, [onReady]);
-
-    useEffect(() => {
-      onConnectionStateChangeRef.current = onConnectionStateChange;
-    }, [onConnectionStateChange]);
-
-    useEffect(() => {
-      repoPathRef.current = repoPath;
-    }, [repoPath]);
-
-    useEffect(() => {
-      featureNameRef.current = featureName;
-    }, [featureName]);
-
-    const [connectionState, setConnectionState] = useState<ConnectionState>({
-      status: 'connecting',
-      reconnectAttempts: 0,
-    });
-
-    // Notify parent of connection state changes
-    useEffect(() => {
-      onConnectionStateChangeRef.current?.(connectionState);
-    }, [connectionState]);
+      if (prevStatus === 'reconnecting' && currentStatus === 'connected') {
+        const terminal = termRef.current;
+        if (terminal) {
+          terminal.reset();
+          resetPendingRef.current = true;
+          // Clear reset flag after a microtask to ensure snapshot processing sees it
+          Promise.resolve().then(() => {
+            resetPendingRef.current = false;
+          });
+        }
+      }
+    }, [ws.connectionState.status]);
 
     const sendToTerminal = useCallback((data: string) => {
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        sendWsInput(ws, data);
+      const paneId = activePaneIdRef.current;
+      if (paneId != null) {
+        ws.sendInput(paneId, data);
       }
-    }, []);
+    }, [ws]);
 
     const sendResize = useCallback((cols: number, rows: number) => {
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        const json = JSON.stringify({ columns: cols, rows });
-        const bytes = new Uint8Array(json.length + 1);
-        bytes[0] = 0x31; // '1' = resize
-        for (let i = 0; i < json.length; i++) {
-          bytes[i + 1] = json.charCodeAt(i);
-        }
-        ws.send(bytes.buffer);
+      const paneId = activePaneIdRef.current;
+      if (paneId != null) {
+        ws.sendResize(paneId, cols, rows);
       }
-    }, []);
+    }, [ws]);
 
-    // Expose selectSession and sendInput for parent to call (imperative handle)
+    // Expose selectSession, sendInput, paneId for parent
     useImperativeHandle(
       ref,
       () => ({
         selectSession: async (sessionId: string) => {
-          sessionIdRef.current = sessionId;
-          await selectSessionViaApi(server, sessionId, linkedSessionRef.current);
+          // Find pane by numeric ID or by label
+          const numericId = Number(sessionId);
+          const targetPane = !isNaN(numericId)
+            ? ws.paneList.find((p) => p.id === numericId)
+            : ws.paneList.find((p) => p.label === sessionId);
+          if (!targetPane) {
+            console.warn('[WebTerminal] No pane found for sessionId:', sessionId);
+            return;
+          }
+
+          const currentPaneId = activePaneIdRef.current;
+          if (currentPaneId === targetPane.id) return; // already on this pane
+
+          const terminal = termRef.current;
+          if (!terminal) return; // can't switch without xterm initialized (M1 fix)
+
+          // Update activePaneIdRef synchronously before any async operation (Task 2.4)
+          activePaneIdRef.current = targetPane.id;
+
+          // Clear old content for clean transition (Task 2.2)
+          terminal.clear();
+          // Atomic switch: unsubscribe old + subscribe new (Task 2.1)
+          ws.switchPane(currentPaneId, targetPane.id, makePaneCallbacks(terminal));
         },
         sendInput: (data: string) => {
           sendToTerminal(data);
         },
+        get paneId() {
+          return activePaneIdRef.current;
+        },
       }),
-      [server, sendToTerminal]
+      [ws, sendToTerminal]
     );
 
-    /** Handle incoming WS messages: text = server metadata, binary = ttyd protocol. */
-    function handleWsMessage(terminal: any, event: MessageEvent) {
-      // Text message = server metadata (linked session name, pushed before first binary output)
-      if (typeof event.data === 'string') {
-        try {
-          const meta = JSON.parse(event.data);
-          if (meta.linkedSession) {
-            linkedSessionRef.current = meta.linkedSession;
-            console.log('[WebTerminal] Linked session:', meta.linkedSession);
-            // Re-select the correct window in the linked session
-            if (sessionIdRef.current) {
-              selectSessionViaApi(server, sessionIdRef.current, meta.linkedSession);
-            } else {
-              switchToFeature(server, {
-                repoPath: repoPathRef.current,
-                featureName: featureNameRef.current,
-                linkedSession: meta.linkedSession,
-              });
-            }
+    /** Build pane-specific callbacks that route output to this component's xterm instance. */
+    function makePaneCallbacks(terminal: any): PaneCallbacks {
+      return {
+        onPtyData: (data: Uint8Array) => {
+          terminal.write(data);
+        },
+        onBufferSnapshot: (data: Uint8Array) => {
+          // Skip snapshot if reset is pending (race condition fix)
+          if (resetPendingRef.current) {
+            Promise.resolve().then(() => {
+              if (!resetPendingRef.current) {
+                terminal.write(data);
+              }
+            });
+            return;
           }
-        } catch {}
-        return;
-      }
-      // Binary message = ttyd protocol
-      const data = new Uint8Array(event.data as ArrayBuffer);
-      if (data.length < 1) return;
-      const cmd = data[0];
-      if (cmd === 0x30) {
-        // '0' = output
-        terminal.write(data.slice(1));
-      }
-      // cmd === 0x31 -> window title (ignore)
+          terminal.write(data);
+        },
+        onDestroyed: () => {
+          activePaneIdRef.current = undefined;
+          // Show inline message instead of blank screen (Task 4.1, 4.2)
+          terminal.write('\r\n\x1b[1;33m[Terminal session ended]\x1b[0m\r\n');
+          // Notify parent so it can update UI (e.g., remove tab) (M3 fix)
+          onPaneDestroyedRef.current?.();
+        },
+      };
     }
 
-    // Connect terminal — deps do NOT include tmuxWindow, repoPath, featureName
+    // Main init effect: set up xterm.js and create/subscribe pane
     useEffect(() => {
       let cancelled = false;
 
       async function init() {
-        // 1. Switch to the right tmux window via server API
-        if (sessionIdRef.current) {
-          // Session-based: call select-session API (linked session may not be known yet at init)
-          await selectSessionViaApi(server, sessionIdRef.current, linkedSessionRef.current);
-        } else {
-          // Feature-based: call switch-feature API to select the right window
-          try {
-            console.log(
-              '[WebTerminal] Switching to feature:',
-              featureNameRef.current,
-              'repo:',
-              repoPathRef.current
-            );
-            const result = await switchToFeature(server, {
-              repoPath: repoPathRef.current,
-              featureName: featureNameRef.current,
-              linkedSession: linkedSessionRef.current || undefined,
-            });
-            if (result.success && result.data) {
-              hasRunningProcessRef.current = !!result.data.hasRunningProcess;
-              console.log(
-                '[WebTerminal] Switch OK, hasRunningProcess:',
-                result.data.hasRunningProcess
-              );
-            } else {
-              console.warn('[WebTerminal] Switch failed:', result.error);
-            }
-          } catch (err) {
-            console.warn('[WebTerminal] Error switching feature:', err);
-          }
-        }
-
-        if (cancelled) return;
-
-        // 2. Dynamically import xterm (web-only)
         const { Terminal } = await import('@xterm/xterm');
         const { FitAddon } = await import('@xterm/addon-fit');
         const { WebLinksAddon } = await import('@xterm/addon-web-links');
-
-        // Import CSS
         await import('@xterm/xterm/css/xterm.css');
 
         if (cancelled || !terminalRef.current) return;
 
-        // 3. Create terminal
         const term = new Terminal({
           fontSize: Math.min(settings.fontSize, 24),
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, monospace",
@@ -265,7 +202,6 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
 
         const fitAddon = new FitAddon();
         const webLinksAddon = new WebLinksAddon();
-
         term.loadAddon(fitAddon);
         term.loadAddon(webLinksAddon);
 
@@ -273,23 +209,14 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
         fitAddonRef.current = fitAddon;
 
         term.open(terminalRef.current);
-
-        // Fit after render
         requestAnimationFrame(() => {
-          try {
-            fitAddon.fit();
-          } catch {}
+          try { fitAddon.fit(); } catch {}
         });
 
-        // 4. Connect WebSocket
-        connectWs(term);
-
-        // 5. Handle terminal input
         term.onData((data: string) => {
           sendToTerminal(data);
         });
 
-        // 6. Handle resize
         const resizeObserver = new ResizeObserver(() => {
           try {
             fitAddon.fit();
@@ -302,117 +229,27 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
         if (terminalRef.current) {
           resizeObserver.observe(terminalRef.current);
         }
-
-        // Store for cleanup
         (term as any)._resizeObserver = resizeObserver;
-      }
 
-      function connectWs(terminal: any) {
-        const wsUrl = buildWsUrl(server);
-        console.log('[WebTerminal] Connecting WS to:', wsUrl);
-
-        wsClosedIntentionallyRef.current = false;
-
-        const ws = new WebSocket(wsUrl, ['tty']);
-        wsRef.current = ws;
-        ws.binaryType = 'arraybuffer';
-
-        ws.onopen = () => {
-          console.log('[WebTerminal] WS connected');
-          reconnectAttemptsRef.current = 0;
-          setConnectionState({ status: 'connected', reconnectAttempts: 0 });
-
-          // Fit and send initial size
-          try {
-            fitAddonRef.current?.fit();
-            if (terminal.cols && terminal.rows) {
-              sendResize(terminal.cols, terminal.rows);
-            }
-          } catch {}
-
-          // Session-based: window already selected via API in init()
-          if (sessionIdRef.current) {
-            // No action needed — tmux window was selected before WS connect
-          } else if (!hasRunningProcessRef.current) {
-            // Send init commands if no process running (feature-based)
-            setTimeout(() => {
-              if (settings.autoLaunchAgent) {
-                const agentCommand =
-                  settings.defaultAiAgent === 'claude'
-                    ? 'claude'
-                    : settings.defaultAiAgent === 'ollama'
-                      ? 'ollama run deepseek-coder'
-                      : settings.customAgentCommand || `echo "${tRef.current('terminal.error.no_agent')}"`;
-                sendToTerminal(agentCommand + '\n');
-              } else {
-                sendToTerminal(
-                  `echo "\uD83D\uDE80 NomadFlow - ${featureNameRef.current}"\n`
-                );
-              }
-            }, 500);
-          }
-
-          // Notify parent that WS is connected and ready
-          onReadyRef.current?.();
-        };
-
-        ws.onmessage = (event) => handleWsMessage(terminal, event);
-
-        ws.onclose = (event) => {
-          console.log(
-            '[WebTerminal] WS closed, code:',
-            event.code,
-            'reason:',
-            event.reason,
-            'wasClean:',
-            event.wasClean
-          );
-
-          if (cancelled || wsClosedIntentionallyRef.current) return;
-
-          const attempts = reconnectAttemptsRef.current;
-          if (settings.autoReconnect && attempts < settings.maxReconnectAttempts) {
-            reconnectAttemptsRef.current = attempts + 1;
-            setConnectionState({
-              status: 'reconnecting',
-              reconnectAttempts: attempts + 1,
-            });
-            const backoffDelay = Math.min(1000 * Math.pow(2, attempts), 8000);
-            console.log(
-              `[WebTerminal] Reconnecting (attempt ${attempts + 1}/${settings.maxReconnectAttempts}) in ${backoffDelay}ms`
-            );
-            reconnectTimerRef.current = setTimeout(() => {
-              connectWs(terminal);
-            }, backoffDelay);
-          } else {
-            setConnectionState({
-              status: 'error',
-              error:
-                attempts >= settings.maxReconnectAttempts
-                  ? tRef.current('terminal.error.max_reconnect')
-                  : tRef.current('terminal.error.connection_closed', { code: event.code }),
-              reconnectAttempts: attempts,
-            });
-          }
-        };
-
-        ws.onerror = (event) => {
-          console.error('[WebTerminal] WS error:', event);
-          // Don't set state here — onclose will fire right after and handle it
-        };
+        // Signal xterm ready — pane creation handled by the combined effect below
+        setTermReady(true);
       }
 
       init();
 
-      updateServer(server.id, { lastConnected: Date.now() });
-
       return () => {
         cancelled = true;
-        wsClosedIntentionallyRef.current = true;
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current);
+        setTermReady(false);
+        initialPaneCreatedRef.current = false;
+        const paneId = activePaneIdRef.current;
+        if (paneId != null) {
+          if (destroyOnUnmountRef.current) {
+            ws.destroyPane(paneId);
+          } else {
+            ws.unsubscribe(paneId);
+          }
         }
-        wsRef.current?.close();
+        activePaneIdRef.current = undefined;
         const t = termRef.current;
         if (t) {
           (t as any)._resizeObserver?.disconnect();
@@ -421,94 +258,115 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
         termRef.current = null;
         fitAddonRef.current = null;
       };
-    }, [server.id, server.apiUrl, server.authToken]);
+    }, []); // Stable — uses refs for all mutable state
 
-    const handleReconnect = useCallback(() => {
-      reconnectAttemptsRef.current = 0;
-      setConnectionState({ status: 'connecting', reconnectAttempts: 0 });
-      const term = termRef.current;
-      if (!term) return;
+    // Create pane when WS is connected, xterm is ready, AND pane list has arrived.
+    // Handles initial connection, reconnection, and any ordering of the events.
+    useEffect(() => {
+      if (ws.connectionState.status !== 'connected') return;
+      if (!termReady) return;
+      if (!ws.paneListReady) return;
+      const terminal = termRef.current;
+      if (!terminal) return;
+      if (activePaneIdRef.current != null) return; // already have a pane
 
-      wsClosedIntentionallyRef.current = true;
-      wsRef.current?.close();
-      wsClosedIntentionallyRef.current = false;
+      let cancelled = false;
+      (async () => {
+        try {
+          // Before creating, check if an existing pane matches
+          const existingPane = ws.paneList.find(
+            (p) => p.repo === repoName(repoPathRef.current)
+              && p.worktree === featureNameRef.current
+              && p.agentType === agentTypeRef.current
+          );
 
-      function attemptConnect() {
-        const wsUrl = buildWsUrl(server);
-        console.log('[WebTerminal] Reconnect attempt to:', wsUrl);
+          if (existingPane) {
+            if (cancelled) return;
+            activePaneIdRef.current = existingPane.id;
+            ws.subscribe(existingPane.id, makePaneCallbacks(terminal));
 
-        const ws = new WebSocket(wsUrl, ['tty']);
-        wsRef.current = ws;
-        ws.binaryType = 'arraybuffer';
+            // Fit and resize after subscribe
+            try {
+              fitAddonRef.current?.fit();
+              if (terminal.cols && terminal.rows) {
+                ws.sendResize(existingPane.id, terminal.cols, terminal.rows);
+              }
+            } catch {}
 
-        ws.onopen = () => {
-          console.log('[WebTerminal] Reconnected');
-          reconnectAttemptsRef.current = 0;
-          setConnectionState({ status: 'connected', reconnectAttempts: 0 });
+            initialPaneCreatedRef.current = true;
+            onReadyRef.current?.();
+            return;
+          }
+
+          // No existing pane — create a new one
+          const cols = terminal.cols || 80;
+          const rows = terminal.rows || 24;
+          const info = await ws.createPane({
+            repo: repoName(repoPathRef.current),
+            worktree: featureNameRef.current,
+            agentType: agentTypeRef.current,
+            cwd: worktreePathRef.current,
+            cols,
+            rows,
+          });
+          if (cancelled) return;
+
+          activePaneIdRef.current = info.id;
+          ws.subscribe(info.id, makePaneCallbacks(terminal));
+
+          // Fit and resize after subscribe
           try {
             fitAddonRef.current?.fit();
-            if (term.cols && term.rows) {
-              sendResize(term.cols, term.rows);
+            if (terminal.cols && terminal.rows) {
+              ws.sendResize(info.id, terminal.cols, terminal.rows);
             }
           } catch {}
-        };
 
-        ws.onmessage = (event) => handleWsMessage(term, event);
-
-        ws.onclose = (event) => {
-          console.log('[WebTerminal] Reconnect WS closed, code:', event.code);
-          if (!wsClosedIntentionallyRef.current) {
-            const attempts = reconnectAttemptsRef.current;
-            if (settings.autoReconnect && attempts < settings.maxReconnectAttempts) {
-              reconnectAttemptsRef.current = attempts + 1;
-              setConnectionState({
-                status: 'reconnecting',
-                reconnectAttempts: attempts + 1,
-              });
-              const backoffDelay = Math.min(1000 * Math.pow(2, attempts), 8000);
-              console.log(
-                `[WebTerminal] Reconnecting (attempt ${attempts + 1}/${settings.maxReconnectAttempts}) in ${backoffDelay}ms`
-              );
-              reconnectTimerRef.current = setTimeout(attemptConnect, backoffDelay);
-            } else {
-              setConnectionState({
-                status: 'error',
-                error:
-                  attempts >= settings.maxReconnectAttempts
-                    ? tRef.current('terminal.error.max_reconnect')
-                    : tRef.current('terminal.error.connection_closed', { code: event.code }),
-                reconnectAttempts: attempts,
-              });
-            }
+          // Auto-launch agent only on first pane creation (not reconnection)
+          if (!initialPaneCreatedRef.current) {
+            initialPaneCreatedRef.current = true;
+            const s = settingsRef.current;
+            setTimeout(() => {
+              if (cancelled) return;
+              if (s.autoLaunchAgent && agentTypeRef.current !== 'shell') {
+                const agentCommand =
+                  s.defaultAiAgent === 'claude'
+                    ? 'claude'
+                    : s.defaultAiAgent === 'ollama'
+                      ? 'ollama run deepseek-coder'
+                      : s.customAgentCommand || `echo "${tRef.current('terminal.error.no_agent')}"`;
+                ws.sendInput(info.id, agentCommand + '\n');
+              }
+            }, 500);
           }
-        };
 
-        ws.onerror = (event) => {
-          console.error('[WebTerminal] Reconnect WS error:', event);
-        };
-      }
+          onReadyRef.current?.();
+        } catch (err) {
+          console.error('[WebTerminal] Failed to create pane:', err);
+        }
+      })();
 
-      attemptConnect();
-    }, [server, sendResize]);
+      return () => { cancelled = true; };
+    }, [ws.connectionState.status, termReady, ws.paneListReady]);
 
     const statusColorClass =
-      connectionState.status === 'connected'
+      ws.connectionState.status === 'connected'
         ? 'bg-success'
-        : connectionState.status === 'error' || connectionState.status === 'disconnected'
+        : ws.connectionState.status === 'error' || ws.connectionState.status === 'disconnected'
           ? 'bg-destructive'
           : 'bg-warning';
 
     const statusTextClass =
-      connectionState.status === 'connected'
+      ws.connectionState.status === 'connected'
         ? 'text-success'
-        : connectionState.status === 'error' || connectionState.status === 'disconnected'
+        : ws.connectionState.status === 'error' || ws.connectionState.status === 'disconnected'
           ? 'text-destructive'
           : 'text-warning';
 
     const statusLabel =
-      connectionState.status === 'reconnecting'
-        ? t('terminal.status.reconnecting_count', { attempts: connectionState.reconnectAttempts, max: settings.maxReconnectAttempts })
-        : t(`terminal.status.${connectionState.status}`);
+      ws.connectionState.status === 'reconnecting'
+        ? t('terminal.status.reconnecting_count', { attempts: ws.connectionState.reconnectAttempts, max: settings.maxReconnectAttempts })
+        : t(`terminal.status.${ws.connectionState.status}`);
 
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -517,17 +375,10 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
           <span className="font-semibold text-[13px]">{featureName}</span>
           <span className={`w-2 h-2 rounded-full ${statusColorClass}`} />
           <span className={`text-xs ${statusTextClass}`}>{statusLabel}</span>
-          {connectionState.error && (
-            <span className="text-[11px] text-destructive">{connectionState.error}</span>
+          {ws.connectionState.error && (
+            <span className="text-[11px] text-destructive">{ws.connectionState.error}</span>
           )}
           <span className="flex-1" />
-          {(connectionState.status === 'error' || connectionState.status === 'disconnected') && (
-            <button
-              onClick={handleReconnect}
-              className="px-2.5 py-0.5 border border-border rounded-md bg-transparent text-foreground text-xs cursor-pointer">
-              {t('terminal.reconnect')}
-            </button>
-          )}
         </div>
 
         {/* Terminal container */}
@@ -542,3 +393,5 @@ export const WebTerminal = forwardRef<WebTerminalHandle, WebTerminalProps>(
     );
   }
 );
+
+WebTerminal.displayName = 'WebTerminal';

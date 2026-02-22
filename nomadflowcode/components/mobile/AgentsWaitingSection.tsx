@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, View } from 'react-native';
-import { CircleCheck, Clock } from 'lucide-react-native';
+import { CircleCheck } from 'lucide-react-native';
 
 import { AgentStatusBadge } from '@/components/shared/AgentStatusBadge';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
-import { useAgentStatePolling } from '@/lib/hooks/useAgentStatePolling';
-import { closeSession, executeServerCommand } from '@/lib/server-commands';
+import { destroyPane, executeServerCommand, fetchPanes } from '@/lib/server-commands';
+import type { Pane } from '@/lib/types/terminal-messages';
 import type { SessionWithState } from '@/lib/types/session';
 import type { Server, Repository } from '@shared';
 
@@ -17,6 +17,7 @@ interface AgentItem {
   serverName: string;
   server: Server;
   session: SessionWithState;
+  paneId: number;
   repoPath: string | undefined;
 }
 
@@ -25,30 +26,18 @@ interface AgentsWaitingSectionProps {
   onAgentPress: (params: { serverId: string; repoPath: string; featureName: string }) => void;
 }
 
-function formatRelativeTime(isoString: string | null, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  if (!isoString) return '';
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  if (diffMs < 0) return t('agents.time.just_now');
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return t('agents.time.just_now');
-  if (diffMin < 60) return t('agents.time.minutes_ago', { minutes: diffMin });
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return t('agents.time.hours_ago', { hours: diffHours });
-  const diffDays = Math.floor(diffHours / 24);
-  return t('agents.time.days_ago', { days: diffDays });
-}
-
-function ServerPollingAggregator({
+/** Polls /api/list-panes for a single server and reports results upward. */
+function ServerPanePoller({
   server,
   onData,
 }: {
   server: Server;
-  onData: (serverId: string, sessions: SessionWithState[], repoMap: Map<string, string>) => void;
+  onData: (serverId: string, panes: Pane[], repoMap: Map<string, string>) => void;
 }) {
-  const { sessions } = useAgentStatePolling(server.apiUrl || '', server.authToken || '');
   const [repoMap, setRepoMap] = useState<Map<string, string>>(new Map());
   const prevDataKeyRef = useRef('');
 
+  // Fetch repo map once
   useEffect(() => {
     let cancelled = false;
     async function fetchRepos() {
@@ -64,21 +53,33 @@ function ServerPollingAggregator({
     if (server.apiUrl && server.authToken) {
       fetchRepos();
     }
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [server.apiUrl, server.authToken, server.id]);
 
+  // Poll panes every 3 seconds
+  const [panes, setPanes] = useState<Pane[]>([]);
   useEffect(() => {
-    const sessKey = sessions.map((s) => `${s.sessionId}:${s.agentState}`).join('|');
-    const repoKey = Array.from(repoMap.entries())
-      .map(([k, v]) => `${k}=${v}`)
-      .join('|');
-    const dataKey = `${sessKey}::${repoKey}`;
+    let cancelled = false;
+    async function poll() {
+      const result = await fetchPanes(server);
+      if (!cancelled && result.success && result.data?.panes) {
+        setPanes(result.data.panes);
+      }
+    }
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [server.apiUrl, server.authToken, server.id]);
+
+  // Notify parent when panes or repoMap change
+  useEffect(() => {
+    const paneKey = panes.map((p) => `${p.id}:${p.label}:${p.agentState}`).join('|');
+    const repoKey = Array.from(repoMap.entries()).map(([k, v]) => `${k}=${v}`).join('|');
+    const dataKey = `${paneKey}::${repoKey}`;
     if (dataKey === prevDataKeyRef.current) return;
     prevDataKeyRef.current = dataKey;
-    onData(server.id, sessions, repoMap);
-  }, [sessions, repoMap, server.id, onData]);
+    onData(server.id, panes, repoMap);
+  }, [panes, repoMap, server.id, onData]);
 
   return null;
 }
@@ -86,7 +87,7 @@ function ServerPollingAggregator({
 export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSectionProps) {
   const { t } = useTranslation();
   const [serverDataMap, setServerDataMap] = useState<
-    Map<string, { sessions: SessionWithState[]; repoMap: Map<string, string> }>
+    Map<string, { panes: Pane[]; repoMap: Map<string, string> }>
   >(new Map());
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -96,10 +97,10 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
   );
 
   const handleServerData = useCallback(
-    (serverId: string, sessions: SessionWithState[], repoMap: Map<string, string>) => {
+    (serverId: string, panes: Pane[], repoMap: Map<string, string>) => {
       setServerDataMap((prev) => {
         const next = new Map(prev);
-        next.set(serverId, { sessions, repoMap });
+        next.set(serverId, { panes, repoMap });
         return next;
       });
       setInitialLoading(false);
@@ -112,13 +113,23 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
     for (const server of connectedServers) {
       const data = serverDataMap.get(server.id);
       if (!data) continue;
-      for (const session of data.sessions) {
+      for (const pane of data.panes) {
         agents.push({
           serverId: server.id,
           serverName: server.name,
           server,
-          session,
-          repoPath: data.repoMap.get(session.repo),
+          paneId: pane.id,
+          session: {
+            sessionId: String(pane.id),
+            windowName: pane.label,
+            repo: pane.repo,
+            worktree: pane.worktree,
+            agentType: pane.agentType,
+            agentNumber: pane.agentNumber,
+            agentState: pane.agentState,
+            stateTimestamp: null,
+          },
+          repoPath: data.repoMap.get(pane.repo),
         });
       }
     }
@@ -141,18 +152,16 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
         text: t('agents.close.confirm'),
         style: 'destructive',
         onPress: async () => {
-          const result = await closeSession(agent.server, agent.session.sessionId);
+          const result = await destroyPane(agent.server, agent.paneId);
           if (result.success) {
-            // Optimistically remove the closed agent from the local state
+            // Optimistically remove the destroyed pane from local state
             setServerDataMap((prev) => {
               const next = new Map(prev);
               const data = next.get(agent.serverId);
               if (data) {
                 next.set(agent.serverId, {
                   ...data,
-                  sessions: data.sessions.filter(
-                    (s) => s.sessionId !== agent.session.sessionId
-                  ),
+                  panes: data.panes.filter((p) => p.id !== agent.paneId),
                 });
               }
               return next;
@@ -172,7 +181,7 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
       <Text className="mb-2 text-sm font-semibold text-foreground">{t('agents.waiting.title')}</Text>
 
       {connectedServers.map((server) => (
-        <ServerPollingAggregator
+        <ServerPanePoller
           key={server.id}
           server={server}
           onData={handleServerData}
@@ -195,7 +204,7 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
         <View className="gap-2">
           {allAgents.map((agent) => (
             <Pressable
-              key={`${agent.serverId}-${agent.session.sessionId}`}
+              key={`${agent.serverId}-${agent.paneId}`}
               onPress={() => handleAgentPress(agent)}
               onLongPress={() => handleAgentLongPress(agent)}
               disabled={!agent.repoPath}
@@ -215,14 +224,6 @@ export function AgentsWaitingSection({ servers, onAgentPress }: AgentsWaitingSec
                   {agent.serverName} &middot; {agent.session.repo}
                 </Text>
               </View>
-              {agent.session.stateTimestamp && (
-                <View className="flex-row items-center gap-1">
-                  <Icon as={Clock} size={12} className="text-muted-foreground" />
-                  <Text className="text-xs text-muted-foreground">
-                    {formatRelativeTime(agent.session.stateTimestamp, t)}
-                  </Text>
-                </View>
-              )}
             </Pressable>
           ))}
         </View>

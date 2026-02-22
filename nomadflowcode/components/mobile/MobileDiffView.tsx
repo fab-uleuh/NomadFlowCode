@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Animated,
@@ -12,8 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { fetchFileDiff, fetchFileContent } from '@/lib/server-commands';
+import { getLanguageFromPath } from '@/lib/syntax-utils';
 import type { Server, DiffHunk, DiffLine } from '@shared';
 import { FileCodeIcon, FileTextIcon, XIcon } from 'lucide-react-native';
+import { Highlight, themes } from 'prism-react-renderer';
 
 type ViewMode = 'diff' | 'file';
 
@@ -22,6 +24,7 @@ interface MobileDiffViewProps {
   worktreePath: string;
   filePath: string;
   onClose: () => void;
+  initialMode?: ViewMode;
 }
 
 function HunkBlock({ hunk }: { hunk: DiffHunk }) {
@@ -92,32 +95,42 @@ function HunkBlock({ hunk }: { hunk: DiffHunk }) {
   );
 }
 
-function FileContentBlock({ content }: { content: string }) {
-  const lines = content.split('\n');
-
+function FileContentBlock({ content, language }: { content: string; language: string }) {
   return (
-    <View>
-      {lines.map((line, idx) => (
-        <View key={idx} className="flex-row">
-          <Text
-            className="w-12 text-right font-mono text-xs text-muted-foreground"
-            style={{ paddingRight: 8 }}>
-            {idx + 1}
-          </Text>
-          <Text className="flex-1 font-mono text-xs text-foreground" numberOfLines={1}>
-            {line}
-          </Text>
+    <Highlight code={content} language={language} theme={themes.vsDark}>
+      {({ tokens, getTokenProps }) => (
+        <View>
+          {tokens.map((line, i) => (
+            <View key={i} className="flex-row">
+              <Text
+                className="w-12 text-right font-mono text-xs text-muted-foreground"
+                style={{ paddingRight: 8 }}>
+                {i + 1}
+              </Text>
+              <Text className="flex-1 font-mono text-xs" numberOfLines={1}>
+                {line.map((token, key) => {
+                  const props = getTokenProps({ token });
+                  return (
+                    <Text key={key} style={{ color: props.style?.color as string }}>
+                      {props.children}
+                    </Text>
+                  );
+                })}
+              </Text>
+            </View>
+          ))}
         </View>
-      ))}
-    </View>
+      )}
+    </Highlight>
   );
 }
 
-export function MobileDiffView({ server, worktreePath, filePath, onClose }: MobileDiffViewProps) {
+export function MobileDiffView({ server, worktreePath, filePath, onClose, initialMode = 'diff' }: MobileDiffViewProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const [mode, setMode] = useState<ViewMode>('diff');
+  const [mode, setMode] = useState<ViewMode>(initialMode);
+  const language = useMemo(() => getLanguageFromPath(filePath), [filePath]);
   const [hunks, setHunks] = useState<DiffHunk[]>([]);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -259,7 +272,7 @@ export function MobileDiffView({ server, worktreePath, filePath, onClose }: Mobi
           </View>
         ) : (
           <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator>
+            <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled={true}>
               <View style={{ minWidth: '100%' }}>
                 {hunks.map((hunk, hunkIdx) => (
                   <HunkBlock key={hunkIdx} hunk={hunk} />
@@ -270,9 +283,9 @@ export function MobileDiffView({ server, worktreePath, filePath, onClose }: Mobi
         )
       ) : fileContent !== null ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator>
+          <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled={true}>
             <View style={{ minWidth: '100%' }}>
-              <FileContentBlock content={fileContent} />
+              <FileContentBlock content={fileContent} language={language} />
             </View>
           </ScrollView>
         </ScrollView>

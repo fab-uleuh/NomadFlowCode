@@ -8,8 +8,6 @@ description: Install NomadFlowCode and run your first session.
 Make sure the following are installed on your development server:
 
 - **Git** (2.20+) — with worktree support
-- **tmux** (3.0+) — terminal multiplexer
-- **ttyd** (1.7+) — share your terminal over the web
 - **Rust toolchain** — to build from source (or download a prebuilt binary)
 
 ## Installation
@@ -39,12 +37,6 @@ version = 1
 
 [paths]
 base_dir = "~/.nomadflowcode"
-
-[tmux]
-session = "nomadflow"
-
-[ttyd]
-port = 7681
 
 [api]
 port = 8080

@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchFileContent } from '@/lib/server-commands';
+import { getLanguageFromPath } from '@/lib/syntax-utils';
 import { ArrowLeft, FileCode } from 'lucide-react-native';
 import type { Server } from '@shared';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface FileContentViewProps {
   server: Server;
@@ -59,10 +62,12 @@ export function FileContentView({
     fetchContent();
   }, [fetchContent]);
 
+  const language = useMemo(() => getLanguageFromPath(filePath), [filePath]);
+
   const MAX_LINES = 3000;
   const allLines = content?.split('\n') ?? [];
   const isTruncated = allLines.length > MAX_LINES && !showAll;
-  const lines = isTruncated ? allLines.slice(0, MAX_LINES) : allLines;
+  const displayContent = isTruncated ? allLines.slice(0, MAX_LINES).join('\n') : (content ?? '');
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -98,15 +103,29 @@ export function FileContentView({
             </button>
           </div>
         ) : (
-          <div className="font-mono text-[14px] leading-[20px]">
-            {lines.map((line, idx) => (
-              <div key={idx} className="flex">
-                <span className="w-[60px] shrink-0 text-right pr-3 text-muted-foreground text-[12px] select-none">
-                  {idx + 1}
-                </span>
-                <span className="text-foreground whitespace-pre">{line}</span>
-              </div>
-            ))}
+          <>
+            <SyntaxHighlighter
+              language={language}
+              style={vscDarkPlus}
+              showLineNumbers
+              customStyle={{
+                margin: 0,
+                padding: '8px 0',
+                background: 'transparent',
+                fontSize: '14px',
+                lineHeight: '20px',
+              }}
+              lineNumberStyle={{
+                minWidth: '50px',
+                paddingRight: '12px',
+                color: 'rgba(255,255,255,0.25)',
+                fontSize: '12px',
+                userSelect: 'none',
+              }}
+              codeTagProps={{ style: { fontFamily: 'inherit' } }}
+            >
+              {displayContent}
+            </SyntaxHighlighter>
             {isTruncated && (
               <div className="px-4 py-3 text-center border-t border-[rgba(255,255,255,0.06)]">
                 <p className="text-[12px] text-muted-foreground mb-2">
@@ -119,7 +138,7 @@ export function FileContentView({
                 </button>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Moon, Sun } from 'lucide-react-native';
 import { useStorage } from '@/lib/context/storage-context';
+import i18n from '@/lib/i18n';
 
 type AiAgent = 'claude' | 'ollama' | 'custom';
 
@@ -27,13 +28,11 @@ export function SettingsDialog({
 
   const [customCommand, setCustomCommand] = useState(settings.customAgentCommand || '');
   const [fontSize, setFontSize] = useState(settings.fontSize.toString());
-  const [tmuxPrefix, setTmuxPrefix] = useState(settings.tmuxSessionPrefix);
 
   const handleSave = async () => {
     await updateSettings({
       customAgentCommand: customCommand,
       fontSize: parseInt(fontSize) || 14,
-      tmuxSessionPrefix: tmuxPrefix,
     });
     onClose();
   };
@@ -67,6 +66,20 @@ export function SettingsDialog({
               <span>{t('settings.appearance.theme')}</span>
               <span className="text-muted-foreground capitalize">
                 {t(`settings.theme.${colorScheme}`)}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                const langs: ('en' | 'fr')[] = ['en', 'fr'];
+                const current = (settings.language || i18n.language || 'en') as 'en' | 'fr';
+                const next = langs[(langs.indexOf(current) + 1) % langs.length];
+                updateSettings({ language: next });
+                i18n.changeLanguage(next);
+              }}
+              className="flex items-center justify-between w-full px-3.5 py-2.5 border-none rounded-lg bg-muted text-foreground text-sm cursor-pointer mt-2">
+              <span>{t('settings.appearance.language')}</span>
+              <span className="text-muted-foreground">
+                {t(`settings.language.${settings.language || i18n.language || 'en'}`)}
               </span>
             </button>
           </div>
@@ -147,17 +160,6 @@ export function SettingsDialog({
                   value={fontSize}
                   onChange={(e) => setFontSize(e.target.value)}
                   className="w-[100px] px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium mb-1 text-foreground">
-                  {t('settings.terminal.tmux_prefix')}
-                </label>
-                <input
-                  type="text"
-                  value={tmuxPrefix}
-                  onChange={(e) => setTmuxPrefix(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm outline-none"
                 />
               </div>
               <button

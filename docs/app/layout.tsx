@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     template: '%s | NomadFlow',
   },
   description:
-    'Manage git worktrees and tmux sessions from your phone. A single Rust binary paired with a mobile app for on-the-go development.',
+    'Manage git worktrees and PTY sessions from your phone. A single Rust binary paired with a mobile app for on-the-go development.',
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'NomadFlow',
     description:
-      'Manage git worktrees and tmux sessions from your phone.',
+      'Manage git worktrees and PTY sessions from your phone.',
     siteName: 'NomadFlow',
     type: 'website',
   },

@@ -23,7 +23,7 @@ export default function TermsPage() {
       <h2>2. Description of Service</h2>
       <p>
         NomadFlowCode is a mobile application that allows you to connect to your
-        own self-hosted servers to manage git worktrees, tmux sessions, and
+        own self-hosted servers to manage git worktrees, PTY sessions, and
         access terminal sessions remotely. The app acts as a client and requires
         you to set up and maintain your own server infrastructure.
       </p>

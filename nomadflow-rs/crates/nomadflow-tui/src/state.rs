@@ -21,19 +21,7 @@ pub struct ServerConfig {
     pub id: String,
     pub name: String,
     pub api_url: Option<String>,
-    pub ttyd_url: Option<String>,
     pub auth_token: Option<String>,
-}
-
-/// Derive ttyd URL from API URL (same host, port 7681).
-pub fn derive_ttyd_url(api_url: &str) -> String {
-    if let Ok(mut url) = url::Url::parse(api_url) {
-        url.set_port(Some(7681)).ok();
-        url.set_path("/");
-        url.to_string().trim_end_matches('/').to_string()
-    } else {
-        "http://localhost:7681".to_string()
-    }
 }
 
 fn state_path(settings: &Settings) -> PathBuf {
@@ -67,7 +55,6 @@ pub fn load_servers(settings: &Settings) -> Vec<ServerConfig> {
     let localhost = ServerConfig {
         id: "localhost".to_string(),
         name: "localhost".to_string(),
-        ttyd_url: Some(derive_ttyd_url(&api_url)),
         api_url: Some(api_url),
         auth_token: if settings.auth.secret.is_empty() {
             None

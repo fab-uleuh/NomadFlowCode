@@ -4,7 +4,6 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::tmux_local;
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     if app.loading {
@@ -36,21 +35,15 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         Paragraph::new(format!("Select a feature ({repo_name}):")).style(Style::default().bold());
     frame.render_widget(title, chunks[0]);
 
-    let mut items: Vec<ListItem> = app
+    let items: Vec<ListItem> = app
         .features
         .iter()
         .enumerate()
         .map(|(i, cf)| {
             let f = &cf.feature;
-            let is_idle = tmux_local::is_shell_idle_str(cf.pane_command.as_deref());
-            let process_info = match &cf.pane_command {
-                Some(_) if is_idle => "  idle".to_string(),
-                Some(cmd) => format!("  ● {cmd} running"),
-                None => String::new(),
-            };
             let prefix = if f.is_main { "⌂ " } else { "" };
             let suffix = if f.is_main { "  [source]" } else { "" };
-            let label = format!("{prefix}{}  {}{process_info}{suffix}", f.name, f.branch);
+            let label = format!("{prefix}{}  {}{suffix}", f.name, f.branch);
 
             let item = ListItem::new(label);
             if i == app.selected_index {
@@ -69,6 +62,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         create_item
     };
+    let mut items = items;
     items.push(create_item);
 
     let list = List::new(items);

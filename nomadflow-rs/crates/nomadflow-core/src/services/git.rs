@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::config::Settings;
 use crate::error::{NomadError, Result};
 use crate::models::{BranchInfo, Feature, Repository, WorktreeInfo};
-use crate::shell::{run, run_command};
+use crate::shell::{run, run_direct};
 
 pub struct GitService {
     repos_dir: PathBuf,
@@ -159,8 +159,9 @@ impl GitService {
             url.to_string()
         };
 
-        let dest_str = dest.to_string_lossy();
-        let result = run_command(&format!("git clone {clone_url} {dest_str}"), None, 600.0).await;
+        let dest_str = dest.to_string_lossy().to_string();
+        let result =
+            run_direct("git", &["clone", &clone_url, &dest_str], None, 600.0).await;
 
         if !result.success() {
             return Err(NomadError::CommandFailed(format!(
@@ -171,7 +172,13 @@ impl GitService {
 
         // Security: remove token from remote URL
         if token.is_some() {
-            run(&format!("git remote set-url origin {url}"), Some(&dest_str)).await;
+            run_direct(
+                "git",
+                &["remote", "set-url", "origin", url],
+                Some(&dest_str),
+                30.0,
+            )
+            .await;
         }
 
         let branch = self.get_current_branch(&dest).await;
@@ -698,6 +705,33 @@ mod tests {
         assert_eq!(
             inject_token("https://github.com/user/repo.git", "tok123"),
             "https://oauth2:tok123@github.com/user/repo.git"
+        );
+    }
+
+    /// Verify that shell metacharacters in a clone URL are NOT interpreted.
+    /// The URL is syntactically invalid for git, so clone will fail — but the
+    /// important thing is that the injected command (`echo PWNED`) is never executed.
+    #[tokio::test]
+    async fn test_clone_repo_rejects_shell_injection() {
+        let tmp = TempDir::new().unwrap();
+        let settings = Settings {
+            paths: crate::config::PathsConfig {
+                base_dir: tmp.path().to_string_lossy().to_string(),
+            },
+            ..Default::default()
+        };
+        settings.ensure_directories().unwrap();
+        let svc = GitService::new(&settings);
+
+        // URL containing shell metacharacters
+        let malicious_url = "https://example.com/repo.git; echo PWNED > /tmp/pwned";
+        let result = svc.clone_repo(malicious_url, None, Some("evil")).await;
+
+        // Clone should fail (bad URL), but the shell injection must NOT have executed
+        assert!(result.is_err());
+        assert!(
+            !std::path::Path::new("/tmp/pwned").exists(),
+            "Shell injection was executed! /tmp/pwned exists"
         );
     }
 

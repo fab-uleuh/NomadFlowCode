@@ -13,12 +13,6 @@ version = 1
 [paths]
 base_dir = "~/.nomadflowcode"
 
-[tmux]
-session = "nomadflow"
-
-[ttyd]
-port = 7681
-
 [api]
 port = 8080
 host = "0.0.0.0"
@@ -50,18 +44,7 @@ subdomain = "fabien"
 The following subdirectories are created automatically:
 - `{base_dir}/repos/` — bare git clones
 - `{base_dir}/worktrees/` — checked-out worktrees per feature
-
-### `[tmux]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `session` | string | `nomadflow` | Name of the tmux session to create and manage. |
-
-### `[ttyd]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `port` | integer | `7681` | Port for the ttyd web terminal process. |
+- `{base_dir}/sessions/` — agent state tracking data
 
 ### `[api]`
 
@@ -84,12 +67,11 @@ Can be overridden at runtime with `nomadflow web --port <port>`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `secret` | string | `""` (empty) | Shared secret for API authentication. When empty, auth is disabled. |
+| `secret` | string | `""` (empty) | Shared secret for API and terminal authentication. When empty, auth is disabled. |
 
 When set, this secret is used as:
 - **Bearer token** for API requests (`Authorization: Bearer <secret>`)
-- **Basic Auth password** for ttyd (username: `nomadflow`)
-- **Query parameter** for WebSocket proxy (`/terminal/ws?token=<secret>`)
+- **Query parameter** for WebSocket connection (`/ws/panes?token=<secret>`)
 
 ### `[tunnel]`
 

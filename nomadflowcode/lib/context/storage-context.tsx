@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 
 import type { Server, Repository, Feature } from '@shared';
 import type { AppSettings, TerminalShortcut } from '../types';
+import i18n from '@/lib/i18n';
 
 /** Strip legacy fields (ttydUrl, url) when loading from storage. */
 function cleanServer(raw: any): Server {
@@ -58,7 +59,6 @@ interface StorageContextType {
 const defaultSettings: AppSettings = {
   defaultAiAgent: 'claude',
   autoLaunchAgent: true,
-  tmuxSessionPrefix: 'nomadflow',
   theme: 'dark',
   fontSize: 30,
   autoReconnect: true,
@@ -118,7 +118,13 @@ export function StorageProvider({ children }: StorageProviderProps) {
       if (recentReposData) setRecentRepos(JSON.parse(recentReposData));
       if (recentFeaturesData) setRecentFeatures(JSON.parse(recentFeaturesData));
       if (lastSelectionData) setLastSelection(JSON.parse(lastSelectionData));
-      if (settingsData) setSettings({ ...defaultSettings, ...JSON.parse(settingsData) });
+      if (settingsData) {
+        const parsed = { ...defaultSettings, ...JSON.parse(settingsData) };
+        setSettings(parsed);
+        if (parsed.language) {
+          i18n.changeLanguage(parsed.language);
+        }
+      }
       if (shortcutsData) setTerminalShortcuts(JSON.parse(shortcutsData));
     } catch (error) {
       console.error('Failed to load storage data:', error);

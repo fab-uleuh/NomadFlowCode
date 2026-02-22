@@ -16,9 +16,11 @@ import { CreateFeatureDialog } from '@/components/web/CreateFeatureDialog';
 import { CreateSessionDialog } from '@/components/web/CreateSessionDialog';
 import { CommandPalette } from '@/components/web/CommandPalette';
 import { DiffPanel } from '@/components/web/DiffPanel';
+import { FileTreePanel } from '@/components/web/FileTreePanel';
 import { FileDiffView } from '@/components/web/FileDiffView';
 import { FileContentView } from '@/components/web/FileContentView';
 import type { Server, Repository, Feature } from '@shared';
+import type { PaneInfoDto } from '@/lib/terminal-ws';
 import type { ConnectionState } from '@/lib/types';
 import type { SessionWithState } from '@/lib/types/session';
 
@@ -75,6 +77,9 @@ function WebApp() {
     Map<string, SessionWithState[]>
   >(new Map());
 
+  // Pane list from WS (used for tab bar instead of HTTP polling)
+  const [wsPaneList, setWsPaneList] = useState<PaneInfoDto[]>([]);
+
   // Terminal ref for imperative split pane control
   const splitTerminalRef = useRef<SplitTerminalHandle>(null);
 
@@ -92,6 +97,7 @@ function WebApp() {
   const [createSessionWorktreePath, setCreateSessionWorktreePath] = useState('');
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [asideTab, setAsideTab] = useState<'changes' | 'files'>('changes');
   const [mainPanelMode, setMainPanelMode] = useState<MainPanelMode>('terminal');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState | null>(null);
@@ -193,44 +199,53 @@ function WebApp() {
     [createFeatureServer, createFeatureRepoPath, handleSelectFeature]
   );
 
-  // Compute worktree sessions for the tab bar
+  // Compute worktree sessions for the tab bar from real-time WS pane list
   const worktreeSessions = useMemo(() => {
-    if (!selectedSession || !selectedServer) return [];
-    const serverSessions = allSessionsByServer.get(selectedServer.id) ?? [];
-    return serverSessions.filter(
-      (s) => s.repo === selectedSession.repo && s.worktree === selectedSession.worktree
-    );
-  }, [selectedSession, selectedServer, allSessionsByServer]);
-
-  // Shell sessions for the current worktree (used by SplitTerminal for stateless restoration)
-  const shellSessions = useMemo(() => {
-    if (!selectedServer) return [];
-    const serverSessions = allSessionsByServer.get(selectedServer.id) ?? [];
     const repo = selectedRepo?.name || selectedSession?.repo || '';
     const worktree = selectedFeature?.name || selectedSession?.worktree || '';
-    return serverSessions.filter(
-      (s) => s.repo === repo && s.worktree === worktree && s.agentType === 'shell'
-    );
-  }, [selectedServer, selectedRepo, selectedFeature, selectedSession, allSessionsByServer]);
+    if (!repo && !worktree) return [];
+    return wsPaneList
+      .filter((p) => p.repo === repo && p.worktree === worktree)
+      .map((p): SessionWithState => ({
+        sessionId: String(p.id),
+        windowName: p.label,
+        repo: p.repo,
+        worktree: p.worktree,
+        agentType: p.agentType,
+        agentNumber: p.agentNumber,
+        agentState: 'unknown' as const,
+        stateTimestamp: null,
+      }));
+  }, [wsPaneList, selectedRepo, selectedFeature, selectedSession]);
 
   // Handle tab bar "+" button
   const handleTabBarCreateSession = useCallback(() => {
     const server = selectedServerRef.current;
-    const session = selectedSessionRef.current;
-    if (server && session) {
-      handleCreateSession(server, session.worktree);
+    const worktree = currentWorktreePathRef.current;
+    if (server && worktree) {
+      handleCreateSession(server, worktree);
     }
   }, [handleCreateSession]);
 
-  // Handle tab bar session select
+  // Handle tab bar session select — in-place switch within the same worktree
   const handleTabBarSelectSession = useCallback(
     (session: SessionWithState) => {
-      const server = selectedServerRef.current;
-      if (server) {
-        handleSelectSession(server, session, currentWorktreePathRef.current);
+      setSelectedSession(session);
+      // selectSessionInFocusedPane accepts numeric pane ID as string
+      splitTerminalRef.current?.selectSessionInFocusedPane(session.sessionId);
+    },
+    []
+  );
+
+  // Handle tab bar session destroy — destroy pane via WS through SplitTerminal handle
+  const handleTabBarDestroySession = useCallback(
+    (session: SessionWithState) => {
+      const paneId = Number(session.sessionId);
+      if (!isNaN(paneId)) {
+        splitTerminalRef.current?.destroyPaneById(paneId);
       }
     },
-    [handleSelectSession]
+    []
   );
 
   // Collapse split panes when all sessions close (M3: task 5.3 fix)
@@ -248,6 +263,12 @@ function WebApp() {
   // File click from diff panel → show diff view
   const handleFileClick = useCallback((filePath: string) => {
     setMainPanelMode('diff');
+    setSelectedFilePath(filePath);
+  }, []);
+
+  // File click from file tree panel → show file content
+  const handleTreeFileClick = useCallback((filePath: string) => {
+    setMainPanelMode('file-content');
     setSelectedFilePath(filePath);
   }, []);
 
@@ -430,25 +451,15 @@ function WebApp() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {hasTerminal ? (
             <>
-              {/* Tab bar (only in terminal mode when session-based and has worktree sessions) */}
-              {mainPanelMode === 'terminal' && selectedSession && worktreeSessions.length > 0 && (
+              {/* Tab bar — shown when panes exist for the current worktree */}
+              {mainPanelMode === 'terminal' && worktreeSessions.length > 0 && (
                 <AgentTabBar
                   sessions={worktreeSessions}
-                  activeSessionId={selectedSession.sessionId}
+                  activeSessionId={selectedSession?.sessionId ?? worktreeSessions[0]?.sessionId ?? null}
                   onSelectSession={handleTabBarSelectSession}
                   onCreateSession={handleTabBarCreateSession}
+                  onDestroySession={handleTabBarDestroySession}
                 />
-              )}
-              {mainPanelMode === 'terminal' && selectedSession && worktreeSessions.length === 0 && (
-                <div
-                  className="mx-3 my-1.5 flex items-center gap-2 px-3 py-2 backdrop-blur-[12px] bg-[rgba(15,15,23,0.9)] rounded-[10px] border border-[rgba(255,255,255,0.06)] shrink-0">
-                  <span className="text-[13px] text-muted-foreground">{t('agents.none_running')}</span>
-                  <button
-                    onClick={handleTabBarCreateSession}
-                    className="px-2 py-1 text-[12px] rounded-md border-none bg-accent text-foreground cursor-pointer hover:bg-accent/80">
-                    {t('agents.create.button_short')}
-                  </button>
-                </div>
               )}
 
               {/* Terminal — always mounted, hidden via CSS when not active (preserves WebSocket/xterm state) */}
@@ -461,10 +472,10 @@ function WebApp() {
                   featureName={selectedFeature?.name || selectedSession?.worktree || ''}
                   sessionId={selectedSession?.sessionId}
                   worktreePath={currentWorktreePath}
-                  shellSessions={shellSessions}
                   dialogOpen={showAddServer || showSettings || showCloneRepo || showCreateFeature || showCreateSession || showCommandPalette}
                   onConnectionStateChange={setConnectionState}
                   onToggleDiff={toggleDiffPanel}
+                  onPaneListChange={setWsPaneList}
                 />
               </div>
 
@@ -519,15 +530,52 @@ function WebApp() {
               minWidth: showDiffPanel ? 280 : 0,
             }}>
             {showDiffPanel && (
-              <DiffPanel
-                server={selectedServer}
-                worktreePath={
-                  selectedSession?.worktree ||
-                  selectedFeature?.worktreePath ||
-                  ''
-                }
-                onFileClick={handleFileClick}
-              />
+              <>
+                {/* Tab bar */}
+                <div className="flex border-b border-[rgba(255,255,255,0.06)] shrink-0">
+                  <button
+                    onClick={() => setAsideTab('changes')}
+                    className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-center cursor-pointer bg-transparent border-none ${
+                      asideTab === 'changes'
+                        ? 'text-foreground border-b-2 border-b-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}>
+                    {t('file_tree.tab_changes')}
+                  </button>
+                  <button
+                    onClick={() => setAsideTab('files')}
+                    className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-center cursor-pointer bg-transparent border-none ${
+                      asideTab === 'files'
+                        ? 'text-foreground border-b-2 border-b-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}>
+                    {t('file_tree.tab_files')}
+                  </button>
+                </div>
+
+                {/* Tab content */}
+                {asideTab === 'changes' ? (
+                  <DiffPanel
+                    server={selectedServer}
+                    worktreePath={
+                      selectedSession?.worktree ||
+                      selectedFeature?.worktreePath ||
+                      ''
+                    }
+                    onFileClick={handleFileClick}
+                  />
+                ) : (
+                  <FileTreePanel
+                    server={selectedServer}
+                    worktreePath={
+                      selectedSession?.worktree ||
+                      selectedFeature?.worktreePath ||
+                      ''
+                    }
+                    onFileClick={handleTreeFileClick}
+                  />
+                )}
+              </>
             )}
           </aside>
         )}

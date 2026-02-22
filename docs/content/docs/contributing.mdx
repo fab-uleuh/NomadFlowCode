@@ -29,7 +29,7 @@ cargo build
 cargo test
 ```
 
-Requirements: Rust toolchain, tmux, ttyd, git.
+Requirements: Rust toolchain, git.
 
 ### Mobile app
 
@@ -70,17 +70,13 @@ pub struct Feature {
 
 On macOS, `/tmp` is a symlink to `/private/tmp`. Always use `canonicalize()` when comparing paths in tests or runtime logic.
 
-### Tmux test sessions
+### Native PTY testing
 
-Tests that create tmux sessions must use unique session names (include the PID) to avoid collisions when running tests in parallel:
+The `nomadflow-pty` crate handles terminal state. When writing tests for PTY features, use the `PaneManager` and `PaneActor` abstractions. Avoid spawning real PTY processes in unit tests unless testing the raw PTY spawning logic.
 
-```rust
-let session = format!("test-{}", std::process::id());
-```
+### Pane identifying
 
-### Tmux window naming
-
-Windows are named `{repo}:{feature}` to avoid collisions when multiple repos have features with the same name.
+Panes are identified by a combination of `repo` and `worktree` fields rather than a single string, ensuring robust identification across multiple repositories.
 
 ## Pull request guidelines
 

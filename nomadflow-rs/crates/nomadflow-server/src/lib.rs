@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod display;
 pub mod routes;
+pub mod socket;
 pub mod state;
 pub mod tunnel;
 
@@ -14,8 +15,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use nomadflow_core::config::Settings;
-use nomadflow_core::services::tmux::TmuxService;
-use nomadflow_core::services::ttyd::TtydService;
+
 
 use crate::auth::auth_middleware;
 use crate::state::AppState;
@@ -45,14 +45,15 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .merge(routes::features::router())
         .merge(routes::sessions::router())
         .merge(routes::git_diff::router())
-        .merge(routes::terminal::http_proxy_router())
+        .merge(routes::file_tree::router())
+        .merge(routes::panes::rest_router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
         ));
 
-    // WebSocket proxy to ttyd (auth via query param, handled in handler)
-    let ws = Router::new().merge(routes::terminal::ws_router());
+    // WebSocket handler (auth via query param, handled in handler)
+    let ws = Router::new().merge(routes::panes::ws_router());
 
     let router = public.merge(api).merge(ws);
 
@@ -107,7 +108,7 @@ fn build_connect_url(host_override: &Option<String>, port: u16) -> String {
     }
 }
 
-/// Run the HTTP server (with tmux session setup and ttyd startup).
+/// Run the HTTP server (with PTY pane manager and Unix socket listener for CLI attach).
 /// The server shuts down gracefully when `shutdown` is cancelled.
 /// When `public` is true, a bore tunnel is started and the server is exposed via the relay.
 /// When `quiet` is true, connection info (QR code) is not printed (used when running alongside TUI).
@@ -118,40 +119,39 @@ pub async fn serve(
     quiet: bool,
     host_override: Option<String>,
 ) -> color_eyre::Result<()> {
-    // 0. Auto-generate a secret if --public and none configured
+    // 0. Auth secret handling
     if public && settings.auth.secret.is_empty() {
+        return Err(color_eyre::eyre::eyre!(
+            "Refusing to start in --public mode without an explicit auth secret.\n\
+             Set one with: --auth-secret <SECRET> or NOMADFLOW_AUTH_SECRET=<SECRET>"
+        ));
+    }
+
+    if settings.auth.secret.is_empty() {
         use rand::Rng;
         let secret: String = rand::rng()
             .sample_iter(rand::distr::Alphanumeric)
             .take(32)
             .map(|b| b as char)
             .collect();
-        tracing::warn!("No auth secret configured — generated a temporary one for this session");
-        settings.auth.secret = secret;
+        settings.auth.secret = secret.clone();
+        // Print to stdout (not tracing) so it's easy to copy
+        eprintln!("Auth secret (auto-generated): {secret}");
     }
 
-    // 1. Ensure tmux session exists (ttyd needs it)
-    let tmux = TmuxService::new(&settings.tmux.session);
-    if let Err(e) = tmux.ensure_session().await {
-        tracing::warn!("Failed to ensure tmux session: {e}");
-    } else {
-        info!(session = %settings.tmux.session, "Tmux session ready");
-    }
-
-    // 2. Start ttyd subprocess
-    let mut ttyd = TtydService::new(&settings);
-    match ttyd.start().await {
-        Ok(()) => info!(port = settings.ttyd.port, "ttyd started"),
-        Err(e) => tracing::warn!("Failed to start ttyd: {e} (terminal proxy will not work)"),
-    }
-
-    // 3. Build state and router
+    // 1. Build state and router
     let state = Arc::new(AppState::new(settings.clone()));
 
     // Install/update hook scripts before accepting connections (AC #1)
     if let Err(e) = state.agent_state.ensure_hook_scripts().await {
         tracing::warn!("Failed to install hook scripts: {e}");
     }
+
+    // Purge stale agent state files (older than 24 hours)
+    state
+        .agent_state
+        .purge_stale_state_files(std::time::Duration::from_secs(24 * 3600))
+        .await;
 
     // Auto-inject hooks into all tracked repos so Claude Code state tracking
     // works without requiring a manual create-session first.
@@ -161,7 +161,7 @@ pub async fn serve(
                 let repo_path = std::path::Path::new(&repo.path);
                 // Resolve symlinks (repos in ~/.nomadflowcode/repos/ are symlinks)
                 let real_path = repo_path.canonicalize().unwrap_or(repo_path.to_path_buf());
-                if let Err(e) = state.agent_state.inject_hooks_for_project(&real_path).await {
+                if let Err(e) = state.agent_state.inject_hooks(&real_path).await {
                     tracing::warn!(repo = %repo.name, "Failed to inject hooks: {e}");
                 }
             }
@@ -171,6 +171,9 @@ pub async fn serve(
         }
         Err(e) => tracing::warn!("Failed to list repos for hook injection: {e}"),
     }
+
+    // Start agent state watcher (AC #5)
+    spawn_agent_state_watcher(state.clone(), shutdown.clone());
 
     let addr = format!("{}:{}", settings.api.host, settings.api.port);
     let router = build_router(state.clone());
@@ -203,20 +206,29 @@ pub async fn serve(
         display::print_connection_info(&connect_url, &settings.auth.secret, public);
     }
 
+    // 6. Start Unix socket listener alongside TCP (for `nomadflow attach`)
+    let socket_path = settings.socket_path();
+    let socket_state = state.clone();
+    let socket_shutdown = shutdown.clone();
+    tokio::spawn(async move {
+        if let Err(e) =
+            socket::serve_unix_socket(&socket_path, socket_state, socket_shutdown).await
+        {
+            tracing::error!("Unix socket listener failed: {e}");
+        }
+    });
+
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await?;
 
-    // Cleanup: stop ttyd after graceful shutdown
-    info!("Stopping ttyd…");
-    ttyd.stop().await;
     info!("Server stopped");
 
     Ok(())
 }
 
 /// Run a lightweight HTTP server that serves the web dashboard (static files).
-/// This is a separate server from the API — no tmux, no ttyd, no auth.
+/// This is a separate server from the API — no auth.
 pub async fn serve_web(settings: &Settings, shutdown: CancellationToken) -> color_eyre::Result<()> {
     let port = settings.web.port;
     let cors = CorsLayer::permissive();
@@ -237,6 +249,54 @@ pub async fn serve_web(settings: &Settings, shutdown: CancellationToken) -> colo
 
     info!("Web dashboard stopped");
     Ok(())
+}
+
+/// Periodically poll for agent state changes across all active panes.
+fn spawn_agent_state_watcher(state: Arc<AppState>, shutdown: CancellationToken) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(2000));
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let panes = {
+                        let manager = state.pane_manager.lock().await;
+                        manager.list_panes()
+                    };
+
+                    for pane in panes {
+                        // Match pane to state file via CWD
+                        match state.agent_state.get_state_by_cwd(&pane.cwd).await {
+                            Ok(Some(current_state)) => {
+                                // Map nomadflow_core AgentStateKind to nomadflow_pty AgentStateKind
+                                let kind = match current_state.state {
+                                    nomadflow_core::models::AgentStateKind::WaitingForInput => nomadflow_pty::types::AgentStateKind::WaitingForInput,
+                                    nomadflow_core::models::AgentStateKind::WaitingForPermission => nomadflow_pty::types::AgentStateKind::WaitingForPermission,
+                                    nomadflow_core::models::AgentStateKind::Generating => nomadflow_pty::types::AgentStateKind::Generating,
+                                    nomadflow_core::models::AgentStateKind::Idle => nomadflow_pty::types::AgentStateKind::Idle,
+                                    nomadflow_core::models::AgentStateKind::Done => nomadflow_pty::types::AgentStateKind::Done,
+                                    nomadflow_core::models::AgentStateKind::Error => nomadflow_pty::types::AgentStateKind::Error,
+                                    nomadflow_core::models::AgentStateKind::Unknown => nomadflow_pty::types::AgentStateKind::Unknown,
+                                };
+
+                                if kind != pane.agent_state {
+                                    // Update PaneManager
+                                    let mut manager = state.pane_manager.lock().await;
+                                    let _ = manager.update_pane_state(pane.id, kind);
+                                    // Notify subscribers
+                                    let _ = state.agent_state_broadcast.send((pane.id.0, kind));
+                                }
+                            }
+                            Ok(None) => {} // No state file for this CWD
+                            Err(e) => {
+                                tracing::debug!(cwd = %pane.cwd, "Failed to read agent state: {e}");
+                            }
+                        }
+                    }
+                }
+                _ = shutdown.cancelled() => break,
+            }
+        }
+    });
 }
 
 #[cfg(test)]

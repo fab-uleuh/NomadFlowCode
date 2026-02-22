@@ -15,9 +15,9 @@ export type RootStackParamList = {
   'job-detail': { serverId: string; jobId: string };
 };
 
-export interface TmuxSession {
+export interface PTYSession {
   name: string;
-  windows: import('@shared').TmuxWindow[];
+  panes: import('@shared').PTYPane[];
   attached: boolean;
 }
 
@@ -25,8 +25,8 @@ export interface AppSettings {
   defaultAiAgent: 'claude' | 'ollama' | 'custom';
   customAgentCommand?: string;
   autoLaunchAgent: boolean;
-  tmuxSessionPrefix: string;
   theme: 'dark' | 'light' | 'system';
+  language?: 'en' | 'fr';
   fontSize: number;
   autoReconnect: boolean;
   reconnectDelay: number;
@@ -39,17 +39,10 @@ export interface ConnectionState {
   reconnectAttempts: number;
 }
 
-export interface TerminalMessage {
-  type: 'input' | 'output' | 'resize' | 'ping' | 'pong';
-  data?: string;
-  cols?: number;
-  rows?: number;
-}
-
 // Command types for server scripts
 export interface ServerCommand {
-  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo' | 'list-branches' | 'attach-branch' | 'create-session' | 'close-session' | 'select-session' | 'worktree-status' | 'file-diff' | 'file-content' | 'list-sessions';
-  params?: Record<string, string>;
+  action: 'list-repos' | 'list-features' | 'create-feature' | 'delete-feature' | 'switch-feature' | 'clone-repo' | 'list-branches' | 'attach-branch' | 'create-session' | 'close-session' | 'select-session' | 'worktree-status' | 'file-diff' | 'file-content' | 'list-sessions' | 'list-panes' | 'destroy-pane' | 'list-dir';
+  params?: Record<string, unknown>;
 }
 
 export interface CreateFeatureParams {

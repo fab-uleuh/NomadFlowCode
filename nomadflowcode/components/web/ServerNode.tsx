@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, Monitor, MoreHorizontal } from 'lucide-react-native';
 import { executeServerCommand } from '@/lib/server-commands';
 import { useStorage } from '@/lib/context/storage-context';
-import { useAgentStatePolling } from '@/lib/hooks/useAgentStatePolling';
 import { RepoNode } from './RepoNode';
 import type { Server, Repository, Feature } from '@shared';
 import type { SessionWithState } from '@/lib/types/session';
@@ -33,18 +32,12 @@ export function ServerNode({
   const { deleteServer } = useStorage();
   const [expanded, setExpanded] = useState(false);
   const [repos, setRepos] = useState<Repository[]>([]);
+  const [sessions, setSessions] = useState<SessionWithState[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const { sessions } = useAgentStatePolling(server.apiUrl ?? '', server.authToken ?? '');
-
-  // Bubble up polling results to parent for tab bar
-  useEffect(() => {
-    onSessionsUpdate(server, sessions);
-  }, [sessions, server, onSessionsUpdate]);
 
   // Group sessions by repo name for efficient lookup in child components
   const sessionsByRepo = useMemo(() => {
@@ -60,16 +53,26 @@ export function ServerNode({
     return map;
   }, [sessions]);
 
-  const loadRepos = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await executeServerCommand(server, { action: 'list-repos' });
-      if (result.success && result.data) {
-        setRepos(result.data.repos);
+      const [repoResult, sessionResult] = await Promise.all([
+        executeServerCommand(server, { action: 'list-repos' }),
+        executeServerCommand(server, { action: 'list-sessions' }),
+      ]);
+
+      if (repoResult.success && repoResult.data) {
+        setRepos(repoResult.data.repos);
         setOnline(true);
       } else {
-        throw new Error(result.error || t('servers.error.load_failed'));
+        throw new Error(repoResult.error || t('servers.error.load_failed'));
+      }
+
+      if (sessionResult.success && sessionResult.data) {
+        const sessList = sessionResult.data.sessions;
+        setSessions(sessList);
+        onSessionsUpdate(server, sessList);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('servers.error.connection_failed'));
@@ -77,14 +80,14 @@ export function ServerNode({
     } finally {
       setIsLoading(false);
     }
-  }, [server]);
+  }, [server, onSessionsUpdate, t]);
 
   const handleToggle = useCallback(() => {
     if (!expanded) {
-      loadRepos();
+      loadData();
     }
     setExpanded((prev) => !prev);
-  }, [expanded, loadRepos]);
+  }, [expanded, loadData]);
 
   // Close menu on click outside
   useEffect(() => {

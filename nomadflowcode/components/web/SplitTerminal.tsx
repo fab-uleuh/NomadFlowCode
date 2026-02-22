@@ -10,16 +10,18 @@ import { useTranslation } from 'react-i18next';
 import { WebTerminal } from './WebTerminal';
 import type { WebTerminalHandle } from './WebTerminal';
 import { ShortcutBar } from './ShortcutBar';
-import { executeServerCommand } from '@/lib/server-commands';
+import { TerminalWsProvider, useTerminalWs } from '@/lib/hooks/useTerminalWs';
 import type { Server } from '@shared';
+import type { PaneInfoDto } from '@/lib/terminal-ws';
 import type { ConnectionState } from '@/lib/types';
 import type { SessionWithState } from '@/lib/types/session';
 
 interface SplitPane {
   id: string;
+  paneId?: number;
   sessionId?: string;
   windowName?: string;
-  isCreating?: boolean;
+  agentType?: string;
 }
 
 export interface SplitTerminalHandle {
@@ -28,6 +30,7 @@ export interface SplitTerminalHandle {
   selectSessionInFocusedPane: (sessionId: string) => Promise<void>;
   getPaneCount: () => number;
   resetToSinglePane: () => void;
+  destroyPaneById: (paneId: number) => void;
 }
 
 interface SplitTerminalProps {
@@ -40,6 +43,7 @@ interface SplitTerminalProps {
   dialogOpen?: boolean;
   onConnectionStateChange?: (state: ConnectionState) => void;
   onToggleDiff?: () => void;
+  onPaneListChange?: (panes: PaneInfoDto[]) => void;
 }
 
 type TwoPaneLayout = 'horizontal' | 'vertical';
@@ -114,19 +118,31 @@ function getGridStyle(paneCount: number, twoPaneLayout: TwoPaneLayout): React.CS
   }
 }
 
-/** Close a shell session via the server API (fire-and-forget). */
-function closeSessionApi(server: Server, sessionId: string) {
-  executeServerCommand(server, {
-    action: 'close-session',
-    params: { sessionId },
-  }).catch((err) => {
-    console.warn('[SplitTerminal] close-session failed:', sessionId, err);
-  });
+// --- Inner component: uses shared WS context ---
+
+interface SplitTerminalInnerProps {
+  repoPath: string;
+  featureName: string;
+  sessionId?: string;
+  worktreePath: string;
+  shellSessions?: SessionWithState[];
+  dialogOpen?: boolean;
+  onConnectionStateChange?: (state: ConnectionState) => void;
+  onToggleDiff?: () => void;
+  onPaneListChange?: (panes: PaneInfoDto[]) => void;
 }
 
-export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>(
-  ({ server, repoPath, featureName, sessionId, worktreePath, shellSessions, dialogOpen, onConnectionStateChange, onToggleDiff }, ref) => {
+const SplitTerminalInner = forwardRef<SplitTerminalHandle, SplitTerminalInnerProps>(
+  ({ repoPath, featureName, sessionId, worktreePath, shellSessions, dialogOpen, onConnectionStateChange, onToggleDiff, onPaneListChange }, ref) => {
     const { t } = useTranslation();
+    const ws = useTerminalWs();
+
+    // Forward pane list changes to parent
+    const onPaneListChangeRef = useRef(onPaneListChange);
+    useEffect(() => { onPaneListChangeRef.current = onPaneListChange; }, [onPaneListChange]);
+    useEffect(() => {
+      onPaneListChangeRef.current?.(ws.paneList);
+    }, [ws.paneList]);
     const maxPanes = useMaxPanes();
     const maxPanesRef = useRef(maxPanes);
     useEffect(() => {
@@ -138,10 +154,6 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
     ]);
     const [focusedPaneId, setFocusedPaneId] = useState('');
     const [twoPaneLayout, setTwoPaneLayout] = useState<TwoPaneLayout>('horizontal');
-
-    // Keep server ref for async closures
-    const serverRef = useRef(server);
-    useEffect(() => { serverRef.current = server; }, [server]);
 
     const worktreePathRef = useRef(worktreePath);
     useEffect(() => { worktreePathRef.current = worktreePath; }, [worktreePath]);
@@ -166,14 +178,10 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
       dialogOpenRef.current = dialogOpen ?? false;
     }, [dialogOpen]);
 
-    // Collapse excess panes when viewport shrinks — close sessions for removed panes
+    // Collapse excess panes when viewport shrinks — WebTerminal unmount handles cleanup
     useEffect(() => {
       setPanes((prev) => {
         if (prev.length <= maxPanes) return prev;
-        const removed = prev.slice(maxPanes);
-        for (const p of removed) {
-          if (p.sessionId) closeSessionApi(serverRef.current, p.sessionId);
-        }
         return prev.slice(0, maxPanes);
       });
     }, [maxPanes]);
@@ -193,7 +201,6 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
         const newPanes = [...prev];
         for (const session of toRestore) {
           if (newPanes.length >= max) break;
-          // Skip if we already have a pane for this session
           if (newPanes.some((p) => p.sessionId === session.sessionId)) continue;
           newPanes.push({
             id: generatePaneId(),
@@ -207,39 +214,15 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
     // Map of pane ID -> WebTerminalHandle for imperative delegation
     const paneRefsMap = useRef<Map<string, WebTerminalHandle | null>>(new Map());
 
-    // Per-pane connection states for aggregation
-    const paneConnectionStates = useRef<Map<string, ConnectionState>>(new Map());
+    // Forward shared WS connection state to parent
     const onConnectionStateChangeRef = useRef(onConnectionStateChange);
     useEffect(() => {
       onConnectionStateChangeRef.current = onConnectionStateChange;
     }, [onConnectionStateChange]);
 
-    const aggregateAndForward = useCallback(() => {
-      const states = Array.from(paneConnectionStates.current.values());
-      if (states.length === 0) return;
-
-      let aggregated: ConnectionState;
-      if (states.some((s) => s.status === 'connected')) {
-        aggregated = { status: 'connected', reconnectAttempts: 0 };
-      } else if (states.some((s) => s.status === 'reconnecting')) {
-        const r = states.find((s) => s.status === 'reconnecting')!;
-        aggregated = { status: 'reconnecting', reconnectAttempts: r.reconnectAttempts };
-      } else if (states.some((s) => s.status === 'connecting')) {
-        aggregated = { status: 'connecting', reconnectAttempts: 0 };
-      } else {
-        const err = states.find((s) => s.status === 'error');
-        aggregated = err || { status: 'disconnected', reconnectAttempts: 0 };
-      }
-      onConnectionStateChangeRef.current?.(aggregated);
-    }, []);
-
-    const handlePaneConnectionStateChange = useCallback(
-      (paneId: string, state: ConnectionState) => {
-        paneConnectionStates.current.set(paneId, state);
-        aggregateAndForward();
-      },
-      [aggregateAndForward]
-    );
+    useEffect(() => {
+      onConnectionStateChangeRef.current?.(ws.connectionState);
+    }, [ws.connectionState]);
 
     // Track whether an addPane is in-flight (prevent double-fire from keyboard repeat)
     const addingPaneRef = useRef(false);
@@ -248,87 +231,56 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
       if (addingPaneRef.current) return;
       if (paneCountRef.current >= maxPanesRef.current) return;
 
-      const placeholderId = generatePaneId();
       addingPaneRef.current = true;
 
-      // 1. Add placeholder immediately (reactive UI)
       setPanes((prev) => {
-        if (prev.length >= maxPanesRef.current) return prev;
+        if (prev.length >= maxPanesRef.current) {
+          addingPaneRef.current = false;
+          return prev;
+        }
         if (prev.length === 1) {
           setTwoPaneLayout(direction);
         }
-        return [...prev, { id: placeholderId, isCreating: true }];
+        return [...prev, { id: generatePaneId(), agentType: 'shell' }];
       });
 
-      // 2. Create shell session via API
-      executeServerCommand(serverRef.current, {
-        action: 'create-session',
-        params: { worktreePath: worktreePathRef.current, agentType: 'shell' },
-      })
-        .then((result) => {
-          const sid = result.data?.session?.sessionId ?? result.data?.sessionId;
-          if (result.success && sid) {
-            setPanes((prev) =>
-              prev.map((p) =>
-                p.id === placeholderId
-                  ? { ...p, sessionId: sid, isCreating: false }
-                  : p
-              )
-            );
-          } else {
-            // Failed — remove placeholder
-            console.warn('[SplitTerminal] create-session failed:', result.error);
-            setPanes((prev) => prev.filter((p) => p.id !== placeholderId));
-          }
-        })
-        .catch((err) => {
-          console.warn('[SplitTerminal] create-session error:', err);
-          setPanes((prev) => prev.filter((p) => p.id !== placeholderId));
-        })
-        .finally(() => {
-          addingPaneRef.current = false;
-        });
+      addingPaneRef.current = false;
     }, []);
 
     const closePane = useCallback(() => {
       const focusedId = effectiveFocusIdRef.current;
-      let didClose = false;
 
       setPanes((prev) => {
         if (prev.length <= 1) return prev;
         // Don't allow closing the first pane (feature window)
         if (prev[0].id === focusedId) return prev;
-        const closing = prev.find((p) => p.id === focusedId);
-        if (closing?.sessionId) {
-          closeSessionApi(serverRef.current, closing.sessionId);
+
+        // Destroy the server-side pane before removing from UI
+        const handle = paneRefsMap.current.get(focusedId);
+        if (handle?.paneId != null) {
+          ws.destroyPane(handle.paneId);
         }
-        didClose = true;
+
         return prev.filter((p) => p.id !== focusedId);
       });
 
-      if (didClose) {
-        paneConnectionStates.current.delete(focusedId);
-        setFocusedPaneId('');
-        aggregateAndForward();
-      }
-    }, [aggregateAndForward]);
+      setFocusedPaneId('');
+    }, [ws]);
 
     const resetToSinglePane = useCallback(() => {
       setPanes((prev) => {
         if (prev.length <= 1) return prev;
-        const keepId = prev[0].id;
-        // Close sessions for removed panes
-        for (const p of prev.slice(1)) {
-          if (p.sessionId) closeSessionApi(serverRef.current, p.sessionId);
-        }
-        for (const id of paneConnectionStates.current.keys()) {
-          if (id !== keepId) paneConnectionStates.current.delete(id);
+        // Destroy server-side panes for all but the first
+        for (let i = 1; i < prev.length; i++) {
+          const handle = paneRefsMap.current.get(prev[i].id);
+          if (handle?.paneId != null) {
+            ws.destroyPane(handle.paneId);
+          }
         }
         return [prev[0]];
       });
       setFocusedPaneId('');
-      aggregateAndForward();
-    }, [aggregateAndForward]);
+    }, [ws]);
 
     const selectSessionInFocusedPane = useCallback(async (sid: string) => {
       const focusedId = effectiveFocusIdRef.current;
@@ -350,6 +302,10 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
       }
     }, []);
 
+    const destroyPaneById = useCallback((paneId: number) => {
+      ws.destroyPane(paneId);
+    }, [ws]);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -358,8 +314,9 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
         selectSessionInFocusedPane,
         getPaneCount: () => panes.length,
         resetToSinglePane,
+        destroyPaneById,
       }),
-      [addPane, closePane, selectSessionInFocusedPane, panes.length, resetToSinglePane]
+      [addPane, closePane, selectSessionInFocusedPane, panes.length, resetToSinglePane, destroyPaneById]
     );
 
     // Keyboard shortcuts: Cmd+D (split H), Cmd+Shift+D (split V), Cmd+W (close pane)
@@ -407,36 +364,53 @@ export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>
                     : 'border border-border'
                 }`}
                 style={{ gridArea: AREA_NAMES[index] }}>
-                {pane.isCreating ? (
-                  <div className="flex-1 flex items-center justify-center bg-background text-muted-foreground text-[13px]">
-                    {t('terminal.creating_session')}
-                  </div>
-                ) : (
-                  <WebTerminal
-                    ref={(handle) => {
-                      if (handle) {
-                        paneRefsMap.current.set(pane.id, handle);
-                      } else {
-                        paneRefsMap.current.delete(pane.id);
-                      }
-                    }}
-                    server={server}
-                    repoPath={repoPath}
-                    featureName={pane.windowName || featureName}
-                    sessionId={pane.sessionId}
-                    hideShortcutBar={isMultiPane}
-                    onConnectionStateChange={(state) =>
-                      handlePaneConnectionStateChange(pane.id, state)
+                <WebTerminal
+                  ref={(handle) => {
+                    if (handle) {
+                      paneRefsMap.current.set(pane.id, handle);
+                    } else {
+                      paneRefsMap.current.delete(pane.id);
                     }
-                    onToggleDiff={onToggleDiff}
-                  />
-                )}
+                  }}
+                  repoPath={repoPath}
+                  featureName={pane.windowName || featureName}
+                  worktreePath={worktreePath}
+                  agentType={pane.agentType || 'claude'}
+                  sessionId={pane.sessionId}
+                  hideShortcutBar={isMultiPane}
+                  onToggleDiff={onToggleDiff}
+                />
               </div>
             );
           })}
         </div>
         {isMultiPane && <ShortcutBar onSend={sendToFocusedPane} onToggleDiff={onToggleDiff} />}
       </div>
+    );
+  }
+);
+
+SplitTerminalInner.displayName = 'SplitTerminalInner';
+
+// --- Outer component: wraps in TerminalWsProvider ---
+
+export const SplitTerminal = forwardRef<SplitTerminalHandle, SplitTerminalProps>(
+  ({ server, repoPath, featureName, sessionId, worktreePath, shellSessions, dialogOpen, onConnectionStateChange, onToggleDiff, onPaneListChange }, ref) => {
+    return (
+      <TerminalWsProvider server={server}>
+        <SplitTerminalInner
+          ref={ref}
+          repoPath={repoPath}
+          featureName={featureName}
+          sessionId={sessionId}
+          worktreePath={worktreePath}
+          shellSessions={shellSessions}
+          dialogOpen={dialogOpen}
+          onConnectionStateChange={onConnectionStateChange}
+          onToggleDiff={onToggleDiff}
+          onPaneListChange={onPaneListChange}
+        />
+      </TerminalWsProvider>
     );
   }
 );

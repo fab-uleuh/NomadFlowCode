@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <p>
         NomadFlowCode (&quot;we&quot;, &quot;our&quot;, or &quot;the app&quot;)
         is a mobile application that connects to your own self-hosted server to
-        manage git worktrees, tmux sessions, and terminal access. This privacy
+        manage git worktrees, PTY sessions, and terminal access. This privacy
         policy explains how we handle your data.
       </p>
 

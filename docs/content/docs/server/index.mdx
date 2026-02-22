@@ -22,10 +22,11 @@ The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP ser
 When the server starts, it:
 
 1. **Loads configuration** from `~/.nomadflowcode/config.toml` (falls back to defaults).
-2. **Creates directories** — `~/.nomadflowcode/repos/` and `~/.nomadflowcode/worktrees/`.
-3. **Ensures a tmux session** exists (creates one if needed).
-4. **Starts ttyd** — spawns a ttyd subprocess attached to the tmux session on the configured port (default 7681).
+2. **Creates directories** — `~/.nomadflowcode/repos/`, `~/.nomadflowcode/worktrees/`, and `~/.nomadflowcode/sessions/`.
+3. **Initializes PaneManager** — the central registry for native PTY panes.
+4. **Starts AgentStateService** — installs and initializes agent tracking hooks.
 5. **Binds the HTTP server** on the configured host and port (default `0.0.0.0:8080`).
+6. **Starts Unix socket listener** — listens on `~/.nomadflowcode/nomadflow.sock` for local CLI `attach`.
 
 ## Graceful shutdown
 
@@ -33,7 +34,7 @@ The server supports graceful shutdown via `CancellationToken`. When a shutdown s
 
 1. The HTTP server **stops accepting new connections**.
 2. In-flight requests are allowed to **complete**.
-3. The **ttyd subprocess is stopped** — no orphan processes left behind.
+3. All **managed PTY processes are stopped** cleanly.
 4. The server exits cleanly.
 
 This applies to all modes: `serve` (foreground), `start`/`stop` (daemon), and the default TUI mode.
@@ -41,9 +42,8 @@ This applies to all modes: `serve` (foreground), `start`/`stop` (daemon), and th
 ## Routes
 
 - `GET /health` — health check (no auth)
-- `POST /api/*` — repo and feature management (Bearer or Basic auth)
-- `GET /terminal` — HTTP proxy to ttyd HTML/assets (Bearer or Basic auth)
-- `GET /terminal/ws` — WebSocket proxy to ttyd (token query param auth)
+- `POST /api/*` — repo, feature, and pane management (Bearer auth)
+- `GET /ws/panes` — multiplexed WebSocket for terminal access (token query param auth)
 
 See [API Reference](/docs/server/api) for full details.
 
@@ -88,4 +88,4 @@ WantedBy=multi-user.target
 
 ### Docker
 
-Ensure the container has `tmux` and `ttyd` installed, and that the tmux session can be created inside the container.
+No external terminal dependencies (like tmux or ttyd) are required. NomadFlowCode uses an integrated Rust-native PTY multiplexer to handle all terminal sessions.

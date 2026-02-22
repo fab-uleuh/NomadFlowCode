@@ -2,7 +2,7 @@
 
 **Code from anywhere — mobile terminal & workflow manager for nomad developers**
 
-NomadFlow is an open-source platform that turns your phone into a full development environment. A single Rust binary manages git worktrees, tmux sessions, and a web terminal, while the React Native app lets you seamlessly switch between projects from your pocket.
+NomadFlow is an open-source platform that turns your phone into a full development environment. A single Rust binary manages git worktrees, Rust-native PTY sessions, and a real-time terminal, while the React Native app lets you seamlessly switch between projects from your pocket.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)
@@ -12,27 +12,28 @@ NomadFlow is an open-source platform that turns your phone into a full developme
 
 ### Instant Workflow
 - **3-step selection**: Server → Repo → Feature → Terminal ready
-- **Zero manual commands**: environment auto-configured with git worktrees + tmux
+- **Zero manual commands**: environment auto-configured with git worktrees
 - **Branch management**: create, switch, and manage branches from your phone
 
 ### Mobile App
 - **iOS & Android** via React Native / Expo
-- **Integrated terminal** powered by ttyd with WebSocket proxy
-- **Session persistence** via tmux — reconnect where you left off
+- **Integrated terminal** powered by xterm.js with multiplexed binary protocol
+- **Session persistence**: Rust-native PTY multiplexer keeps your terminal sessions alive
 - **Command shortcuts**: quick bar with customizable terminal commands
 - **Deep linking**: connect to a server via `nomadflowcode://connect?url=...&secret=...`
 
 ### Server (Single Rust Binary)
 - **All-in-one**: HTTP API + TUI wizard + daemon mode in one binary
 - **Interactive TUI**: ratatui-based wizard to manage servers, repos, and features
+- **Rust-native PTY**: high-performance terminal multiplexing without external dependencies
 - **Daemon mode**: `nomadflow start` / `nomadflow stop` for background operation
 - **Graceful shutdown**: no orphan processes on Ctrl+C or SIGTERM
 - **Public tunnels**: expose your server via `--public` with automatic subdomain routing
 
 ### Secure Connection
 - **Shared secret authentication**: single secret protects both API and terminal
-- **Bearer + Basic Auth**: API uses Bearer token, terminal uses Basic Auth (same secret)
-- **WebSocket proxy**: terminal WS goes through the server (handles iOS WKWebView auth)
+- **Bearer token**: all communication is secured via Bearer token
+- **Multiplexed WebSocket**: multiple terminal panes over a single secure connection
 
 ## Screenshots
 
@@ -103,11 +104,8 @@ nomadflow web --port 4000
 nomadflow start
 nomadflow stop
 
-# Display tmux and daemon status
+# Display server status
 nomadflow --status
-
-# Attach directly to a tmux window
-nomadflow attach <window>
 ```
 
 ### Configuration
@@ -120,12 +118,6 @@ version = 1
 
 [paths]
 base_dir = "~/.nomadflowcode"
-
-[tmux]
-session = "nomadflow"
-
-[ttyd]
-port = 7681
 
 [api]
 port = 8080
@@ -166,14 +158,14 @@ pnpm run ios    # or: pnpm run android
 │  │  /api/list-repos  /api/list-features  /health     │  │
 │  │  /api/create-feature  /api/switch-feature         │  │
 │  │  /api/clone-repo  /api/list-branches              │  │
-│  │  /terminal (proxy)  /terminal/ws (WS proxy)       │  │
+│  │  /ws/panes (multiplexed WebSocket)                │  │
 │  └──────────────────────┬───────────────────────────┘  │
 │                         │                               │
 │  ┌──────────────────────▼───────────────────────────┐  │
-│  │                    ttyd + tmux                    │  │
+│  │              Rust-native PTY Multiplexer          │  │
 │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐          │  │
-│  │  │ repo:   │  │ repo:   │  │ repo:   │  ...     │  │
-│  │  │feature-a│  │feature-b│  │  main   │          │  │
+│  │  │ Pane:   │  │ Pane:   │  │ Pane:   │  ...     │  │
+│  │  │repo/feat│  │repo/feat│  │  main   │          │  │
 │  │  └────┬────┘  └────┬────┘  └────┬────┘          │  │
 │  └───────┼────────────┼────────────┼────────────────┘  │
 │          ▼            ▼            ▼                    │
@@ -194,7 +186,7 @@ NomadFlowCode/
 ├── nomadflow-rs/               # Rust binary (single binary: server + TUI)
 │   ├── src/main.rs             # Entry point, CLI args, daemon mode
 │   ├── crates/
-│   │   ├── nomadflow-core/     # Config, models, shell, git/tmux/ttyd services
+│   │   ├── nomadflow-core/     # Config, models, shell, git services
 │   │   ├── nomadflow-server/   # Axum HTTP server with auth middleware
 │   │   ├── nomadflow-tui/      # Ratatui TUI wizard
 │   │   ├── nomadflow-relay/    # Standalone relay server for tunnel routing
@@ -209,8 +201,6 @@ NomadFlowCode/
 
 ### Server
 - macOS or Linux
-- **tmux** (terminal multiplexer)
-- **ttyd** (web terminal)
 - **Git** with worktree support
 
 ### Mobile
@@ -224,7 +214,7 @@ NomadFlowCode/
 
 NomadFlow uses a single shared secret that protects both:
 - **REST API**: via Bearer token (`Authorization: Bearer <secret>`)
-- **Terminal**: via Basic Auth (user: `nomadflow`, password: `<secret>`)
+- **Terminal**: via token in WebSocket upgrade query param
 
 **Setup:**
 
@@ -261,8 +251,9 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
-- [ttyd](https://github.com/tsl0922/ttyd) — Web terminal
-- [tmux](https://github.com/tmux/tmux) — Terminal multiplexer
+- [xterm.js](https://xtermjs.org/) — Web terminal frontend
+- [pty-process](https://github.com/alacritty/pty-process) — Rust PTY handling
+- [alacritty_terminal](https://github.com/alacritty/alacritty) — Terminal state machine
 - [axum](https://github.com/tokio-rs/axum) — Rust web framework
 - [ratatui](https://github.com/ratatui/ratatui) — Terminal UI framework
 - [bore](https://github.com/ekzhang/bore) — TCP tunnel

@@ -49,7 +49,7 @@ pub struct ListFeaturesResponse {
 pub struct CreateFeatureResponse {
     pub worktree_path: String,
     pub branch: String,
-    pub tmux_window: String,
+    pub worktree_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,9 +63,7 @@ pub struct DeleteFeatureResponse {
 pub struct SwitchFeatureResponse {
     pub switched: bool,
     pub worktree_path: String,
-    pub tmux_window: String,
-    #[serde(default)]
-    pub has_running_process: bool,
+    pub worktree_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +78,6 @@ pub struct CloneRepoResponse {
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
     pub status: String,
-    pub tmux_session: String,
     pub api_port: u16,
 }
 
@@ -120,7 +117,7 @@ pub struct AttachBranchRequest {
 pub struct AttachBranchResponse {
     pub worktree_path: String,
     pub branch: String,
-    pub tmux_window: String,
+    pub worktree_name: String,
 }
 
 // ---- Request models ----
@@ -230,7 +227,7 @@ pub struct CloseSessionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SelectSessionRequest {
     pub session_id: String,
-    /// Optional linked tmux session name (e.g. "nomadflow-0") for independent cursor targeting.
+    /// Optional linked session name (e.g. "nomadflow-0") for independent cursor targeting.
     /// When provided, select-window targets this linked session instead of the base session.
     pub linked_session: Option<String>,
 }
@@ -247,6 +244,7 @@ pub struct SelectSessionResponse {
 #[serde(rename_all = "snake_case")]
 pub enum AgentStateKind {
     WaitingForInput,
+    WaitingForPermission,
     Generating,
     Idle,
     Done,
@@ -257,15 +255,9 @@ pub enum AgentStateKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentState {
-    pub session_id: String,
-    pub agent_type: String,
     pub state: AgentStateKind,
     pub timestamp: String,
     pub last_event: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ended_at: Option<String>,
 }
 
 // ---- Git diff/status models ----
@@ -351,6 +343,35 @@ pub struct FileContentResponse {
     pub content: String,
 }
 
+// ---- File tree models ----
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirRequest {
+    pub worktree_path: String,
+    /// Relative path within the worktree (empty string or "." for root)
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirEntry {
+    pub name: String,
+    /// Relative path from worktree root (e.g. "src/components")
+    pub path: String,
+    pub is_dir: bool,
+    /// File size in bytes (0 for directories)
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirResponse {
+    pub entries: Vec<DirEntry>,
+    /// The path that was listed (echoed back for client verification)
+    pub path: String,
+}
+
 // ---- Server model (for TUI config) ----
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -388,12 +409,10 @@ mod tests {
         let resp = SwitchFeatureResponse {
             switched: true,
             worktree_path: "/tmp/wt".to_string(),
-            tmux_window: "repo:feat".to_string(),
-            has_running_process: true,
+            worktree_name: "repo:feat".to_string(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains("\"hasRunningProcess\""));
-        assert!(json.contains("\"tmuxWindow\""));
+        assert!(json.contains("\"worktreeName\""));
     }
 
     #[test]

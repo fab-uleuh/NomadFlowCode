@@ -8,7 +8,7 @@ import { useStorage } from '@/lib/context/storage-context';
 import { fetchSessions } from '@/lib/server-commands';
 import type { AgentStateKind } from '@/lib/types/session';
 import type { Server } from '@shared';
-import Constants from 'expo-constants';
+import packageJson from '@/package.json';
 import { Link, Stack, useRouter } from 'expo-router';
 import {
   MonitorIcon,
@@ -240,7 +240,7 @@ export default function ServersScreen() {
         )}
 
         <Text className="absolute bottom-4 left-4 text-xs text-muted-foreground/50">
-          v{Constants.expoConfig?.version ?? ''}
+          v{packageJson.version}
         </Text>
       </View>
     </>

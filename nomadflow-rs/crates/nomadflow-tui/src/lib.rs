@@ -3,7 +3,6 @@ pub mod app;
 pub mod event;
 pub mod screens;
 pub mod state;
-pub mod tmux_local;
 pub mod widgets;
 
 use std::io;
@@ -42,8 +41,8 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     Ok(())
 }
 
-/// Run the TUI wizard. Returns the tmux session name to attach to (if any).
-pub async fn run_tui(settings: Settings) -> Result<Option<String>> {
+/// Run the TUI wizard.
+pub async fn run_tui(settings: Settings) -> Result<()> {
     let mut terminal = init_terminal()?;
     let mut app = App::new(settings);
 
@@ -52,64 +51,15 @@ pub async fn run_tui(settings: Settings) -> Result<Option<String>> {
     restore_terminal(&mut terminal)?;
 
     match result {
-        Ok(AppResult::AttachWindow(session, window)) => {
-            // Attach directly to a specific window (from SessionPicker)
-            tmux_local::attach_session_target(&session, Some(&window));
-            Ok(None)
-        }
-        Ok(AppResult::Attach(session)) => Ok(Some(session)),
-        Ok(AppResult::Quit) => Ok(None),
+        Ok(AppResult::Quit) => Ok(()),
         Err(e) => Err(e),
     }
 }
 
-/// Run status mode: print tmux status and exit.
-pub fn run_status(settings: &Settings) {
-    let session = &settings.tmux.session;
-
-    if !tmux_local::session_exists(session) {
-        println!("Session: {session}");
-        println!("No active session");
-        return;
-    }
-
-    let windows = tmux_local::list_windows(session);
-    println!("Session: {session}");
-    println!("{} window(s)", windows.len());
-    println!();
-
-    for w in &windows {
-        let cmd = tmux_local::get_pane_command(session, &w.name);
-        let idle = tmux_local::is_shell_idle_str(cmd.as_deref());
-        let status = match &cmd {
-            Some(_) if idle => "idle".to_string(),
-            Some(c) => format!("\u{25cf} {c}"),
-            None => String::new(),
-        };
-        let marker = if w.active { ">" } else { " " };
-        println!("{marker} {}: {}  {status}", w.index, w.name);
-    }
-
-    // Session summary
-    let sessions = tmux_local::list_sessions(session);
-    println!();
-    if sessions.is_empty() {
-        println!("Sessions: none (use 'nomadflow run' to create)");
-    } else {
-        println!("Sessions: {} active", sessions.len());
-        for s in &sessions {
-            let idle = tmux_local::is_shell_idle_str(s.command.as_deref());
-            let status = if idle {
-                "(idle)".to_string()
-            } else {
-                match &s.command {
-                    Some(cmd) => format!("(running: {})", cmd.lines().next().unwrap_or(cmd)),
-                    None => "(idle)".to_string(),
-                }
-            };
-            println!("  {}  {status}", s.window_name);
-        }
-    }
+/// Run status mode: print status and exit.
+pub fn run_status(_settings: &Settings) {
+    println!("Status: Native PTY system (no tmux)");
+    println!("Use 'nomadflow serve' to start the server");
 }
 
 /// Run only the first-run setup wizard (no server needed).

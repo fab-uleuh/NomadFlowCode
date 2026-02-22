@@ -13,11 +13,13 @@ import {
   MonitorIcon,
   TrashIcon,
   InfoIcon,
+  GlobeIcon,
 } from 'lucide-react-native';
 import { useColorScheme, colorScheme as nwColorScheme } from 'nativewind';
 import * as React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 import { View, ScrollView, Alert, Pressable } from 'react-native';
 
 type AiAgent = 'claude' | 'ollama' | 'custom';
@@ -36,13 +38,11 @@ export default function SettingsScreen() {
 
   const [customCommand, setCustomCommand] = useState(settings.customAgentCommand || '');
   const [fontSize, setFontSize] = useState(settings.fontSize.toString());
-  const [tmuxPrefix, setTmuxPrefix] = useState(settings.tmuxSessionPrefix);
 
   const handleSave = async () => {
     await updateSettings({
       customAgentCommand: customCommand,
       fontSize: parseInt(fontSize) || 14,
-      tmuxSessionPrefix: tmuxPrefix,
     });
     Alert.alert(t('common.success'), t('settings.saved'));
   };
@@ -115,6 +115,21 @@ export default function SettingsScreen() {
               <View className="flex-row items-center gap-2">
                 <Text className="capitalize text-muted-foreground">{t(`settings.theme.${colorScheme}`)}</Text>
                 <Icon as={ThemeIcon} className="text-primary" size={18} />
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                const langs: ('en' | 'fr')[] = ['en', 'fr'];
+                const current = (settings.language || i18n.language || 'en') as 'en' | 'fr';
+                const next = langs[(langs.indexOf(current) + 1) % langs.length];
+                updateSettings({ language: next });
+                i18n.changeLanguage(next);
+              }}
+              className="flex-row items-center justify-between rounded-lg bg-muted p-3 mt-3">
+              <Text>{t('settings.appearance.language')}</Text>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-muted-foreground">{t(`settings.language.${settings.language || i18n.language || 'en'}`)}</Text>
+                <Icon as={GlobeIcon} className="text-primary" size={18} />
               </View>
             </Pressable>
           </CardContent>
@@ -195,18 +210,6 @@ export default function SettingsScreen() {
                 onChangeText={setFontSize}
                 keyboardType="number-pad"
                 aria-labelledby="fontSize"
-              />
-            </View>
-
-            <View className="gap-2">
-              <Label nativeID="tmuxPrefix">{t('settings.terminal.tmux_prefix')}</Label>
-              <Input
-                placeholder="nomadflow"
-                value={tmuxPrefix}
-                onChangeText={setTmuxPrefix}
-                autoCapitalize="none"
-                autoCorrect={false}
-                aria-labelledby="tmuxPrefix"
               />
             </View>
 

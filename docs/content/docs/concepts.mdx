@@ -1,19 +1,20 @@
 ---
 title: Concepts
-description: Architecture, git worktrees, tmux sessions, and how they fit together.
+description: Architecture, git worktrees, PTY sessions, and how they fit together.
 ---
 
 ## Architecture
 
-NomadFlowCode is built as a Rust workspace with three crates:
+NomadFlowCode is built as a Rust workspace with four core crates:
 
 | Crate | Role |
 |-------|------|
-| `nomadflow-core` | Configuration, data models, shell utilities, git/tmux/ttyd services |
-| `nomadflow-server` | Axum HTTP server with auth middleware and WebSocket proxy |
+| `nomadflow-core` | Configuration, data models, shell utilities, git services |
+| `nomadflow-pty` | Binary protocol definitions and PTY handling logic |
+| `nomadflow-server` | Axum HTTP server, authentication, and multiplexed WebSocket |
 | `nomadflow-tui` | Ratatui TUI wizard for interactive setup |
 
-All three compile into a single `nomadflow` binary.
+All crates compile into a single `nomadflow` binary.
 
 ## Git worktrees
 
@@ -31,22 +32,22 @@ Instead of switching branches in a single working directory, NomadFlowCode uses 
 
 This means you can have multiple features checked out simultaneously without stashing or losing state.
 
-## Tmux sessions
+## Terminal sessions (PTY)
 
-NomadFlowCode manages a single tmux session (default: `nomadflow`). Each feature gets a dedicated tmux window named `{repo}:{feature}` to avoid collisions across repositories.
+NomadFlowCode uses a native Rust PTY multiplexer instead of external tools like tmux. Each terminal session runs as a **PaneActor** managed by a **PaneManager**.
 
 When you switch features, the server:
 1. Creates a worktree (if needed)
-2. Creates or selects the tmux window
-3. Changes to the worktree directory
+2. Spawns a PTY process in that worktree directory
+3. Manages the terminal state (ANSI parsing, buffer snapshots) in memory
 
-## ttyd and WebSocket proxy
+## Multiplexed WebSocket
 
-[ttyd](https://github.com/tsl0922/ttyd) exposes the tmux session as a web terminal on port 7681. The mobile app loads the ttyd HTML page directly for HTTP content.
-
-For WebSocket connections, iOS WKWebView does not send Basic Auth headers on WebSocket upgrades. To solve this, the NomadFlowCode server provides a WebSocket proxy at `/terminal/ws` that:
-1. Authenticates via a `token` query parameter
-2. Forwards the WebSocket connection to ttyd with proper Basic Auth headers
+All terminal communication happens over a single WebSocket connection at `/ws/panes`. This protocol supports:
+- **Multiplexing** — multiple terminal panes over one connection
+- **Binary framing** — efficient data transfer with minimal overhead
+- **Buffer snapshots** — instant terminal state resume on reconnection
+- **Real-time resizing** — automatic adjustment to mobile/web screen sizes
 
 ## Authentication flow
 
@@ -56,10 +57,8 @@ Mobile App
   ├─ API requests ──► Bearer token in Authorization header
   │                    Server validates against auth.secret
   │
-  ├─ ttyd HTML ──────► Loaded directly (basicAuthCredential in URL)
-  │
-  └─ Terminal WS ───► /terminal/ws?token=<secret>
-                       Server proxies to ttyd with Basic Auth
+  └─ Terminal WS ───► /ws/panes?token=<secret>
+                       Multiplexed binary protocol
 ```
 
 ## File structure
@@ -69,4 +68,5 @@ Mobile App
   config.toml       # server configuration
   repos/            # bare git clones
   worktrees/        # checked-out worktrees per feature
+  sessions/         # agent state tracking data
 ```

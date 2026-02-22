@@ -15,6 +15,6 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let text = Paragraph::new("Preparing tmux session...");
+    let text = Paragraph::new("Preparing PTY session...");
     frame.render_widget(text, area);
 }

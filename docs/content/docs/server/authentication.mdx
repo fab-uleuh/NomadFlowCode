@@ -28,31 +28,22 @@ curl -X POST http://localhost:8080/api/list-repos \
 
 The server middleware checks the `Authorization` header against `auth.secret`. Requests without a valid token receive a `401 Unauthorized` response.
 
-## ttyd authentication
+## Terminal WebSocket authentication
 
-When a secret is configured, ttyd is started with Basic Auth:
-- **Username:** `nomadflow`
-- **Password:** the `auth.secret` value
-
-The mobile app loads the ttyd HTML page directly using a `basicAuthCredential` embedded in the request.
-
-## WebSocket authentication
-
-iOS WKWebView does not send Basic Auth headers on WebSocket upgrade requests. To work around this, the NomadFlowCode server provides a WebSocket proxy at `/terminal/ws` that accepts the token as a query parameter:
+Terminal communication uses a multiplexed WebSocket at `/ws/panes`. Because many environments (including mobile WebViews) have limited control over WebSocket upgrade headers, authentication is handled via a query parameter:
 
 ```
-ws://your-server:8080/terminal/ws?token=your-secret-token
+ws://your-server:8080/ws/panes?token=your-secret-token
 ```
 
 The server:
 1. Validates the `token` query parameter against `auth.secret`
-2. Opens a WebSocket connection to ttyd with proper Basic Auth headers
-3. Forwards messages bidirectionally between the mobile client and ttyd
+2. Upgrades the connection if valid
+3. Rejects invalid tokens with a `401 Unauthorized` status before the upgrade completes.
 
 ## Summary
 
 | Channel | Auth method | Header/param |
 |---------|------------|--------------|
 | API (`/api/*`) | Bearer token | `Authorization: Bearer <secret>` |
-| ttyd HTML | Basic Auth | `nomadflow:<secret>` |
-| WebSocket (`/terminal/ws`) | Query param | `?token=<secret>` |
+| WebSocket (`/ws/panes`) | Query param | `?token=<secret>` |

@@ -8,7 +8,6 @@ use nomadflow_core::models::{
     DeleteFeatureRequest, DeleteFeatureResponse, ListBranchesRequest, ListBranchesResponse,
     ListFeaturesRequest, ListFeaturesResponse, SwitchFeatureRequest, SwitchFeatureResponse,
 };
-use nomadflow_core::services::tmux::window_name;
 
 use crate::state::AppState;
 
@@ -46,43 +45,22 @@ async fn create_feature(
             )
         })?;
 
-    // Derive the worktree name for tmux window naming
-    let wt_name = std::path::Path::new(&worktree_path)
+    // Inject hooks so Claude Code state tracking works in the new worktree
+    let wt_path = std::path::Path::new(&worktree_path);
+    if let Err(e) = state.agent_state.inject_hooks(wt_path).await {
+        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on create: {e}");
+    }
+
+    let worktree_name = std::path::Path::new(&worktree_path)
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
 
-    // Ensure tmux session and window
-    state.tmux.ensure_session().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": e.to_string() })),
-        )
-    })?;
-
-    let win_name = window_name(&request.repo_path, &wt_name);
-    state
-        .tmux
-        .ensure_window(&win_name, Some(&worktree_path))
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "detail": e.to_string() })),
-            )
-        })?;
-
-    // Inject hooks so Claude Code state tracking works in the new worktree
-    let wt_path = std::path::Path::new(&worktree_path);
-    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
-        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on create: {e}");
-    }
-
     Ok(Json(CreateFeatureResponse {
         worktree_path,
         branch,
-        tmux_window: win_name,
+        worktree_name,
     }))
 }
 
@@ -111,9 +89,13 @@ async fn delete_feature(
         }
     }
 
-    // Kill tmux window if it exists
-    let win_name = window_name(&request.repo_path, &request.feature_name);
-    state.tmux.kill_window(&win_name).await;
+    // Resolve worktree path before deletion so we can clean up hooks and state files
+    let repo_name = std::path::Path::new(&request.repo_path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let worktree_path = state.settings.worktrees_dir().join(&repo_name).join(&request.feature_name);
 
     let deleted = state
         .git
@@ -125,6 +107,15 @@ async fn delete_feature(
                 Json(json!({ "detail": e.to_string() })),
             )
         })?;
+
+    // Clean up hooks and state file for the deleted worktree
+    if deleted {
+        if let Err(e) = state.agent_state.cleanup_hooks(&worktree_path).await {
+            tracing::warn!(worktree = %worktree_path.display(), "Failed to cleanup hooks on delete: {e}");
+        }
+        let cwd = worktree_path.to_string_lossy().to_string();
+        state.agent_state.delete_state_file(&cwd).await;
+    }
 
     Ok(Json(DeleteFeatureResponse { deleted }))
 }
@@ -163,45 +154,22 @@ async fn switch_feature(
         wt
     };
 
-    // Ensure tmux session
-    state.tmux.ensure_session().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": e.to_string() })),
-        )
-    })?;
-
-    // Switch to window
-    let win_name = window_name(&request.repo_path, &request.feature_name);
-    let (switched, has_running_process) = state
-        .tmux
-        .switch_to_window(&win_name, Some(&worktree_path), request.linked_session.as_deref())
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "detail": e.to_string() })),
-            )
-        })?;
-
-    if !switched {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": format!("Failed to switch to window '{win_name}'") })),
-        ));
-    }
-
     // Inject hooks into the worktree so Claude Code state tracking works
     let wt_path = std::path::Path::new(&worktree_path);
-    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
+    if let Err(e) = state.agent_state.inject_hooks(wt_path).await {
         tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on switch: {e}");
     }
+
+    let worktree_name = std::path::Path::new(&worktree_path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
 
     Ok(Json(SwitchFeatureResponse {
         switched: true,
         worktree_path,
-        tmux_window: win_name,
-        has_running_process,
+        worktree_name,
     }))
 }
 
@@ -242,42 +210,22 @@ async fn attach_branch(
             )
         })?;
 
-    let wt_name = std::path::Path::new(&worktree_path)
+    // Inject hooks so Claude Code state tracking works in the attached worktree
+    let wt_path = std::path::Path::new(&worktree_path);
+    if let Err(e) = state.agent_state.inject_hooks(wt_path).await {
+        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on attach: {e}");
+    }
+
+    let worktree_name = std::path::Path::new(&worktree_path)
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
 
-    // Ensure tmux session and window
-    state.tmux.ensure_session().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": e.to_string() })),
-        )
-    })?;
-
-    let win_name = window_name(&request.repo_path, &wt_name);
-    state
-        .tmux
-        .ensure_window(&win_name, Some(&worktree_path))
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "detail": e.to_string() })),
-            )
-        })?;
-
-    // Inject hooks so Claude Code state tracking works in the attached worktree
-    let wt_path = std::path::Path::new(&worktree_path);
-    if let Err(e) = state.agent_state.inject_hooks_for_project(wt_path).await {
-        tracing::warn!(worktree = %worktree_path, "Failed to inject hooks on attach: {e}");
-    }
-
     Ok(Json(AttachBranchResponse {
         worktree_path,
         branch,
-        tmux_window: win_name,
+        worktree_name,
     }))
 }
 

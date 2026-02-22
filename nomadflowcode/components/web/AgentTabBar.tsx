@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Plus } from 'lucide-react-native';
+import { Plus, X } from 'lucide-react-native';
 import { AgentStatusBadge } from '@/components/shared/AgentStatusBadge';
 import type { SessionWithState } from '@/lib/types/session';
 
@@ -8,6 +8,7 @@ interface AgentTabBarProps {
   activeSessionId: string | null;
   onSelectSession: (session: SessionWithState) => void;
   onCreateSession: () => void;
+  onDestroySession?: (session: SessionWithState) => void;
 }
 
 export function AgentTabBar({
@@ -15,6 +16,7 @@ export function AgentTabBar({
   activeSessionId,
   onSelectSession,
   onCreateSession,
+  onDestroySession,
 }: AgentTabBarProps) {
   const { t } = useTranslation();
   return (
@@ -26,22 +28,37 @@ export function AgentTabBar({
       {sessions.map((session) => {
         const isActive = session.sessionId === activeSessionId;
         return (
-          <button
+          <div
             key={session.sessionId}
-            onClick={() => onSelectSession(session)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-none cursor-pointer text-[13px] whitespace-nowrap shrink-0 ${
-              isActive
-                ? 'bg-accent text-foreground'
-                : 'bg-transparent text-muted-foreground hover:bg-accent/50'
-            }`}
-            role="tab"
-            aria-selected={isActive}
-            aria-current={isActive ? 'true' : undefined}>
-            <AgentStatusBadge state={session.agentState} size="sm" />
-            <span>
-              {session.agentType}-{session.agentNumber}
-            </span>
-          </button>
+            className="group relative flex items-center shrink-0">
+            <button
+              onClick={() => { if (!isActive) onSelectSession(session); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-none cursor-pointer text-[13px] whitespace-nowrap shrink-0 pr-7 ${
+                isActive
+                  ? 'bg-accent text-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-accent/50'
+              }`}
+              role="tab"
+              aria-selected={isActive}
+              aria-current={isActive ? 'true' : undefined}>
+              <AgentStatusBadge state={session.agentState} size="sm" />
+              <span>
+                {session.agentType}-{session.agentNumber}
+              </span>
+            </button>
+            {onDestroySession && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDestroySession(session);
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded-sm border-none bg-transparent text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-opacity"
+                title={t('agents.close.confirm_title')}
+                aria-label={`${t('common.delete')} ${session.agentType}-${session.agentNumber}`}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
         );
       })}
 

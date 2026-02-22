@@ -17,6 +17,13 @@ const STATE_CONFIG: Record<
     icon: Circle,
     fill: true,
     colorClass: 'text-warning',
+    animate: false,
+  },
+  waiting_for_permission: {
+    labelKey: 'agents.state.permission',
+    icon: Circle,
+    fill: true,
+    colorClass: 'text-destructive',
     animate: true,
   },
   generating: {
@@ -87,7 +94,7 @@ type AgentStatusBadgeProps = VariantProps<typeof badgeVariants> & {
 
 function AgentStatusBadge({ state, size, agentName, className }: AgentStatusBadgeProps) {
   const { t } = useTranslation();
-  const config = STATE_CONFIG[state];
+  const config = STATE_CONFIG[state] ?? STATE_CONFIG.unknown;
   const label = config.labelKey ? t(config.labelKey) : '\u2014';
 
   return (

@@ -25,7 +25,7 @@
         }
       },
       "bundleIdentifier": "com.fab-uleuh.nomadflowcode",
-      "buildNumber": "7"
+      "buildNumber": "8"
     },
     "android": {
       "edgeToEdgeEnabled": true,
@@ -40,7 +40,9 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "runtimeVersion": "1.1.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "updates": {
       "url": "https://u.expo.dev/eae4c0ae-82cd-4bfc-bc0f-5cc413b80b82"
     },

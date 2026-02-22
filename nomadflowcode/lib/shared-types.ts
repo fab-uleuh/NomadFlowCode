@@ -20,10 +20,10 @@ export interface Feature {
   isActive: boolean;
   isMain?: boolean;
   createdAt?: number;
-  tmuxWindow?: string;
+  worktreeName?: string;
 }
 
-export interface TmuxWindow {
+export interface PTYPane {
   index: number;
   name: string;
   active: boolean;
@@ -46,14 +46,13 @@ export interface FeatureListResponse {
 export interface SwitchFeatureResult {
   switched: boolean;
   worktreePath: string;
-  tmuxWindow: string;
-  hasRunningProcess: boolean;
+  worktreeName: string;
 }
 
 export interface CreateFeatureResult {
   worktreePath: string;
   branch: string;
-  tmuxWindow: string;
+  worktreeName: string;
 }
 
 export interface BranchInfo {
@@ -70,7 +69,7 @@ export interface BranchListResponse {
 export interface AttachBranchResult {
   worktreePath: string;
   branch: string;
-  tmuxWindow: string;
+  worktreeName: string;
 }
 
 // Git diff/status types (matches Rust models in nomadflow-core/src/models.rs)
@@ -122,6 +121,18 @@ export interface DiffLine {
 export interface FileContentResponse {
   filePath: string;
   content: string;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+}
+
+export interface ListDirResponse {
+  entries: DirEntry[];
+  path: string;
 }
 
 // Re-export session + agent state types

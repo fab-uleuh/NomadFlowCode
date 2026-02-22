@@ -27,39 +27,26 @@ Lists all git repositories managed by the server (cloned into `~/.nomadflowcode/
 
 Shows all feature branches (worktrees) for the selected repository. Each feature displays:
 - Branch name
-- Active status (currently selected tmux window)
+- Active status (currently selected terminal session)
 - Main branch indicator
 
 Actions:
-- **Tap a feature** — switch to it (selects the tmux window) and open the terminal
+- **Tap a feature** — switch to it and open the terminal
 - **Create feature** — enter a name and base branch to create a new worktree
 
 ### Terminal
 
-A full terminal session powered by ttyd, displayed in a WebView. The terminal connects to the tmux window for the selected feature.
+A high-performance terminal session powered by xterm.js and a native Rust PTY. The terminal connects to a dedicated pane for the selected feature.
 
 ## Terminal controls
 
-### Zoom
+### Pan and Zoom
 
-Pinch to zoom in/out on the terminal view.
+Use standard touch gestures to navigate the terminal view.
 
 ### Keyboard shortcuts
 
-The terminal supports standard keyboard input. On iOS, you can use an external keyboard for full key support including modifier keys.
-
-### Tmux shortcuts
-
-Since each feature runs in a tmux window, standard tmux key bindings work:
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl-b d` | Detach from session |
-| `Ctrl-b n` | Next window |
-| `Ctrl-b p` | Previous window |
-| `Ctrl-b c` | Create new window |
-| `Ctrl-b ,` | Rename window |
-| `Ctrl-b [` | Enter copy mode (scroll) |
+The terminal supports standard keyboard input. A specialized shortcut bar at the bottom provides quick access to common commands and modifier keys.
 
 ## Settings
 

@@ -7,4 +7,4 @@
   with:
     version: 9
 - name: Build web dashboard
-  run: cd nomadflowcode && pnpm install --frozen-lockfile && npx expo export --platform web
+  run: cd nomadflowcode && pnpm install --frozen-lockfile && pnpm run build:terminal-html && npx expo export --platform web

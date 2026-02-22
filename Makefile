@@ -12,7 +12,6 @@ bump:
 	if [ -z "$$VERSION" ]; then echo "Aborted."; exit 1; fi && \
 	echo "Updating to $$VERSION..." && \
 	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' nomadflowcode/app.json && \
-	sed -i '' 's/"runtimeVersion": "[0-9]*\.[0-9]*\.[0-9]*"/"runtimeVersion": "'$$VERSION'"/' nomadflowcode/app.json && \
 	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' nomadflowcode/package.json && \
 	sed -i '' 's/"version": "[0-9]*\.[0-9]*\.[0-9]*"/"version": "'$$VERSION'"/' docs/package.json && \
 	for f in nomadflow-rs/Cargo.toml \

@@ -15,15 +15,8 @@ impl CommandResult {
     }
 }
 
-/// Run a shell command asynchronously with a timeout.
-pub async fn run_command(command: &str, cwd: Option<&str>, timeout_secs: f64) -> CommandResult {
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c").arg(command);
-
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
-    }
-
+/// Execute a prepared `Command` with a timeout, returning a `CommandResult`.
+async fn execute(mut cmd: Command, timeout_secs: f64) -> CommandResult {
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -55,14 +48,40 @@ pub async fn run_command(command: &str, cwd: Option<&str>, timeout_secs: f64) ->
     }
 }
 
+/// Run a shell command (`sh -c`) asynchronously with a timeout.
+pub async fn run_command(command: &str, cwd: Option<&str>, timeout_secs: f64) -> CommandResult {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(command);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    execute(cmd, timeout_secs).await
+}
+
 /// Run a shell command with the default 30s timeout.
 pub async fn run(command: &str, cwd: Option<&str>) -> CommandResult {
     run_command(command, cwd, 30.0).await
 }
 
+/// Run a command directly (without shell) with explicit arguments.
+/// This avoids shell injection by never passing through `sh -c`.
+pub async fn run_direct(
+    program: &str,
+    args: &[&str],
+    cwd: Option<&str>,
+    timeout_secs: f64,
+) -> CommandResult {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    execute(cmd, timeout_secs).await
+}
+
 /// Check if a command exists in PATH.
 pub async fn command_exists(name: &str) -> bool {
-    run(&format!("which {name}"), None).await.success()
+    run_direct("which", &[name], None, 5.0).await.success()
 }
 
 #[cfg(test)]

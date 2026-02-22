@@ -1,6 +1,7 @@
 import type { AgentStateKind, SessionWithState } from '@/lib/types/session';
 
 export const STATE_PRIORITY: AgentStateKind[] = [
+  'waiting_for_permission',
   'waiting_for_input',
   'error',
   'generating',

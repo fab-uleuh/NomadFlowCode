@@ -20,32 +20,6 @@ impl Default for PathsConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct TmuxConfig {
-    pub session: String,
-}
-
-impl Default for TmuxConfig {
-    fn default() -> Self {
-        Self {
-            session: "nomadflow".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct TtydConfig {
-    pub port: u16,
-}
-
-impl Default for TtydConfig {
-    fn default() -> Self {
-        Self { port: 7681 }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
 pub struct ApiConfig {
     pub port: u16,
     pub host: String,
@@ -110,8 +84,6 @@ pub struct Settings {
     #[serde(default)]
     pub version: u32,
     pub paths: PathsConfig,
-    pub tmux: TmuxConfig,
-    pub ttyd: TtydConfig,
     pub api: ApiConfig,
     pub auth: AuthConfig,
     pub tunnel: TunnelConfig,
@@ -123,8 +95,6 @@ impl Default for Settings {
         Self {
             version: 1,
             paths: PathsConfig::default(),
-            tmux: TmuxConfig::default(),
-            ttyd: TtydConfig::default(),
             api: ApiConfig::default(),
             auth: AuthConfig::default(),
             tunnel: TunnelConfig::default(),
@@ -162,6 +132,11 @@ impl Settings {
     /// Sessions directory.
     pub fn sessions_dir(&self) -> PathBuf {
         self.base_dir().join("sessions")
+    }
+
+    /// Unix socket path for IPC (CLI attach).
+    pub fn socket_path(&self) -> PathBuf {
+        self.base_dir().join("nomadflow.sock")
     }
 
     /// Default config file path (static, always the default location).
@@ -234,11 +209,6 @@ version = 1
 [paths]
 base_dir = "/tmp/nomadtest"
 
-[tmux]
-session = "mytest"
-
-[ttyd]
-port = 9999
 
 [api]
 port = 3000
@@ -253,8 +223,7 @@ port = 4000
         let settings: Settings = toml::from_str(toml_str).unwrap();
         assert_eq!(settings.version, 1);
         assert_eq!(settings.paths.base_dir, "/tmp/nomadtest");
-        assert_eq!(settings.tmux.session, "mytest");
-        assert_eq!(settings.ttyd.port, 9999);
+
         assert_eq!(settings.api.port, 3000);
         assert_eq!(settings.api.host, "127.0.0.1");
         assert_eq!(settings.auth.secret, "s3cret");
@@ -267,8 +236,7 @@ port = 4000
         let settings: Settings = toml::from_str(toml_str).unwrap();
         assert_eq!(settings.version, 0); // missing = default u32, detects old configs
         assert_eq!(settings.paths.base_dir, "~/.nomadflowcode");
-        assert_eq!(settings.tmux.session, "nomadflow");
-        assert_eq!(settings.ttyd.port, 7681);
+
         assert_eq!(settings.api.port, 8080);
         assert_eq!(settings.auth.secret, "");
         assert_eq!(settings.web.port, 3000);

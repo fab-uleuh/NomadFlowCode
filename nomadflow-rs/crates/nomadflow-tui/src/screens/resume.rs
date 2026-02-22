@@ -42,7 +42,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(info, chunks[1]);
 
-    let options = ["Yes, attach tmux session", "No, choose another session"];
+    let options = ["Yes, attach PTY session", "No, choose another session"];
 
     let items: Vec<ListItem> = options
         .iter()

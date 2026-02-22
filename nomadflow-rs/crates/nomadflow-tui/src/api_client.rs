@@ -111,9 +111,8 @@ pub async fn create_feature(
     Ok(feature_name.to_string())
 }
 
-/// Switch to a feature (prepares tmux window).
-pub async fn switch_feature(
-    server: &ServerConfig,
+    /// Switch to a feature (prepares worktree).
+    pub async fn switch_feature(    server: &ServerConfig,
     repo_path: &str,
     feature_name: &str,
 ) -> Result<String, String> {
@@ -153,7 +152,6 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: Some("http://myserver:9000".to_string()),
-            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
@@ -165,7 +163,6 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: Some("http://myserver:9000/".to_string()),
-            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://myserver:9000/api");
@@ -177,7 +174,6 @@ mod tests {
             id: "test".to_string(),
             name: "test".to_string(),
             api_url: None,
-            ttyd_url: None,
             auth_token: None,
         };
         assert_eq!(get_api_base_url(&server), "http://localhost:8080/api");

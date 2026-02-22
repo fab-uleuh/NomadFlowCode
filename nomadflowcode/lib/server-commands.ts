@@ -1,4 +1,4 @@
-import type { Server, ApiResponse, SwitchFeatureResult, WorktreeStatusResponse, FileDiffResponse, FileContentResponse } from '@shared';
+import type { Server, ApiResponse, SwitchFeatureResult, WorktreeStatusResponse, FileDiffResponse, FileContentResponse, ListDirResponse } from '@shared';
 import type { ListSessionsResponse } from './types/session';
 import type { ServerCommand, SwitchFeatureParams } from './types';
 
@@ -67,8 +67,7 @@ export async function executeServerCommand(
 
 /**
  * Switch to a feature worktree before opening the terminal.
- * This ensures the tmux window is selected and cd'd into the correct directory.
- * If a process (like claude) is already running, no commands are sent to avoid interference.
+ * This ensures the worktree exists and is ready for a PTY session.
  */
 export async function switchToFeature(
   server: Server,
@@ -78,7 +77,6 @@ export async function switchToFeature(
     repoPath: params.repoPath,
     featureName: params.featureName,
   };
-  if (params.linkedSession) body.linkedSession = params.linkedSession;
   return executeServerCommand(server, {
     action: 'switch-feature',
     params: body,
@@ -127,6 +125,20 @@ export async function fetchFileContent(
 }
 
 /**
+ * Fetch directory listing for a worktree path.
+ */
+export async function fetchListDir(
+  server: Server,
+  worktreePath: string,
+  relativePath: string
+): Promise<ApiResponse<ListDirResponse>> {
+  return executeServerCommand(server, {
+    action: 'list-dir',
+    params: { worktreePath, relativePath },
+  });
+}
+
+/**
  * Fetch all sessions with agent state from a server.
  */
 export async function fetchSessions(
@@ -138,7 +150,7 @@ export async function fetchSessions(
 }
 
 /**
- * Close an agent session (kills the tmux window).
+ * Close an agent session (kills the PTY pane).
  */
 export async function closeSession(
   server: Server,
@@ -151,52 +163,26 @@ export async function closeSession(
 }
 
 /**
- * Build the initialization commands to send to the terminal
+ * List all active PTY panes on a server.
  */
-export function buildInitCommands(
-  repoPath: string,
-  featureName: string,
-  worktreePath: string,
-  tmuxSessionPrefix: string,
-  aiAgentCommand?: string
-): string[] {
-  const sessionName = tmuxSessionPrefix;
-  const windowName = featureName;
-
-  const commands = [
-    `tmux has-session -t "${sessionName}" 2>/dev/null || tmux new-session -d -s "${sessionName}"`,
-    `tmux select-window -t "${sessionName}:${windowName}" 2>/dev/null || tmux new-window -t "${sessionName}" -n "${windowName}"`,
-    `cd "${worktreePath}" 2>/dev/null || cd ~`,
-    'git status --short 2>/dev/null || echo "Not a git repository"',
-    'clear',
-    `echo "🚀 NomadFlow Terminal"`,
-    `echo "📂 Feature: ${featureName}"`,
-    `echo "🌿 Path: ${worktreePath}"`,
-    `echo ""`,
-  ];
-
-  if (aiAgentCommand) {
-    commands.push(`echo "🤖 Launching AI assistant..."`);
-    commands.push(`echo ""`);
-    commands.push(aiAgentCommand);
-  }
-
-  return commands;
+export async function fetchPanes(
+  server: Server
+): Promise<ApiResponse<{ panes: import('@/lib/types/terminal-messages').Pane[] }>> {
+  return executeServerCommand(server, {
+    action: 'list-panes',
+  });
 }
 
 /**
- * Generate tmux commands for common operations
+ * Destroy a PTY pane on the server.
  */
-export const tmuxCommands = {
-  listWindows: 'tmux list-windows',
-  newWindow: (name: string) => `tmux new-window -n "${name}"`,
-  selectWindow: (name: string) => `tmux select-window -t "${name}"`,
-  killWindow: (name: string) => `tmux kill-window -t "${name}"`,
-  splitHorizontal: 'tmux split-window -h',
-  splitVertical: 'tmux split-window -v',
-  nextPane: 'tmux select-pane -t :.+',
-  prevPane: 'tmux select-pane -t :.-',
-  zoomPane: 'tmux resize-pane -Z',
-  detach: 'tmux detach',
-  scrollMode: 'tmux copy-mode',
-};
+export async function destroyPane(
+  server: Server,
+  paneId: number
+): Promise<ApiResponse<{ destroyed: boolean }>> {
+  return executeServerCommand(server, {
+    action: 'destroy-pane',
+    params: { paneId },
+  });
+}
+

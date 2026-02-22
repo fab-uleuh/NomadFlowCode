@@ -4,33 +4,31 @@ use nomadflow_core::agent_state::AgentStateService;
 use nomadflow_core::config::Settings;
 use nomadflow_core::services::git::GitService;
 use nomadflow_core::services::git_diff::GitDiffService;
-use nomadflow_core::services::tmux::TmuxService;
+use nomadflow_pty::PaneManager;
 
 pub struct AppState {
     pub settings: Settings,
     pub git: GitService,
-    pub tmux: TmuxService,
     pub http_client: reqwest::Client,
     pub agent_state: AgentStateService,
     pub git_diff: GitDiffService,
-    /// Serializes linked session discovery to prevent race conditions
-    /// when multiple WS connections arrive simultaneously.
-    pub session_discovery_lock: Arc<tokio::sync::Mutex<()>>,
+    pub pane_manager: Arc<tokio::sync::Mutex<PaneManager>>,
+    pub agent_state_broadcast: tokio::sync::broadcast::Sender<(u16, nomadflow_pty::types::AgentStateKind)>,
 }
 
 impl AppState {
     pub fn new(settings: Settings) -> Self {
         let git = GitService::new(&settings);
-        let tmux = TmuxService::new(&settings.tmux.session);
         let agent_state = AgentStateService::new(&settings);
+        let (agent_state_broadcast, _) = tokio::sync::broadcast::channel(100);
         Self {
             settings,
             git,
-            tmux,
             http_client: reqwest::Client::new(),
             agent_state,
             git_diff: GitDiffService::new(),
-            session_discovery_lock: Arc::new(tokio::sync::Mutex::new(())),
+            pane_manager: Arc::new(tokio::sync::Mutex::new(PaneManager::new())),
+            agent_state_broadcast,
         }
     }
 }

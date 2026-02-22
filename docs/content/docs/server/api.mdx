@@ -16,7 +16,6 @@ No authentication required.
 ```json
 {
   "status": "ok",
-  "tmuxSession": "nomadflow",
   "apiPort": 8080
 }
 ```
@@ -108,12 +107,12 @@ List all features (worktrees) for a repository.
 | `name` | string | Feature name |
 | `worktreePath` | string | Absolute path to the worktree directory |
 | `branch` | string | Git branch name |
-| `isActive` | boolean | Whether this feature's tmux window is currently selected |
+| `isActive` | boolean | Whether this feature's terminal session is currently selected |
 | `isMain` | boolean | Whether this is the main/default branch |
 
 ### `POST /api/create-feature`
 
-Create a new feature branch with its own worktree and tmux window.
+Create a new feature branch with its own worktree and terminal session.
 
 **Request body:**
 
@@ -136,14 +135,13 @@ Create a new feature branch with its own worktree and tmux window.
 ```json
 {
   "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
-  "branch": "feature/my-feature",
-  "tmuxWindow": "my-project:my-feature"
+  "branch": "feature/my-feature"
 }
 ```
 
 ### `POST /api/switch-feature`
 
-Switch to an existing feature's tmux window.
+Switch to an existing feature's terminal session.
 
 **Request body:**
 
@@ -160,7 +158,6 @@ Switch to an existing feature's tmux window.
 {
   "switched": true,
   "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
-  "tmuxWindow": "my-project:my-feature",
   "hasRunningProcess": false
 }
 ```
@@ -169,14 +166,13 @@ Switch to an existing feature's tmux window.
 |-------|------|-------------|
 | `switched` | boolean | Whether the switch was successful |
 | `worktreePath` | string | Path to the worktree |
-| `tmuxWindow` | string | Tmux window name (`repo:feature`) |
-| `hasRunningProcess` | boolean | Whether the tmux window has a running foreground process |
+| `hasRunningProcess` | boolean | Whether the terminal session has a running foreground process |
 
 ## Terminal WebSocket
 
-### `GET /terminal/ws`
+### `GET /ws/panes`
 
-WebSocket proxy to the ttyd terminal. This endpoint exists because iOS WKWebView does not send Basic Auth headers on WebSocket upgrade requests.
+The central WebSocket endpoint for all terminal communication. Supports multiplexing multiple panes over a single connection.
 
 **Query parameters:**
 
@@ -184,10 +180,10 @@ WebSocket proxy to the ttyd terminal. This endpoint exists because iOS WKWebView
 |-------|----------|-------------|
 | `token` | when `auth.secret` is set | The shared secret for authentication |
 
-**Protocol:** The connection uses the `tty` WebSocket subprotocol. Messages are forwarded bidirectionally between the client and the ttyd process.
+**Protocol:** Binary framing with custom multiplexing. Supports control messages (create, destroy, subscribe) and raw PTY data.
 
 **Example:**
 
 ```
-ws://your-server:8080/terminal/ws?token=your-secret
+ws://your-server:8080/ws/panes?token=your-secret
 ```

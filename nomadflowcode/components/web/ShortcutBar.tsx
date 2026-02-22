@@ -18,17 +18,6 @@ const KEYBOARD_SHORTCUTS: { label: string; char: string; Icon?: LucideIcon }[] =
   { label: 'Down', char: '\x1b[B', Icon: ArrowDown },
 ];
 
-const TMUX_SHORTCUTS = [
-  { labelKey: 'terminal.shortcuts.tmux.windows', key: 'w' },
-  { labelKey: 'terminal.shortcuts.tmux.new', key: 'c' },
-  { labelKey: 'terminal.shortcuts.tmux.split_h', key: '"' },
-  { labelKey: 'terminal.shortcuts.tmux.split_v', key: '%' },
-  { labelKey: 'terminal.shortcuts.tmux.next', key: 'n' },
-  { labelKey: 'terminal.shortcuts.tmux.prev', key: 'p' },
-  { labelKey: 'terminal.shortcuts.tmux.detach', key: 'd' },
-  { labelKey: 'terminal.shortcuts.tmux.scroll', key: '[' },
-];
-
 export function ShortcutBar({ onSend, onToggleDiff }: ShortcutBarProps) {
   const { t } = useTranslation();
 
@@ -50,19 +39,6 @@ export function ShortcutBar({ onSend, onToggleDiff }: ShortcutBarProps) {
           title={s.label}
           aria-label={s.label}>
           {s.Icon ? <s.Icon size={12} /> : s.label}
-        </button>
-      ))}
-
-      <span className="w-px h-5 bg-border mx-1 shrink-0" />
-
-      <span className="text-[11px] text-muted-foreground shrink-0">{t('terminal.shortcuts.tmux_label')}</span>
-      {TMUX_SHORTCUTS.map((s) => (
-        <button
-          key={s.key}
-          onClick={() => onSend('\x02' + s.key)}
-          className="px-2.5 py-1 border border-border rounded-md bg-secondary text-foreground text-xs font-mono whitespace-nowrap cursor-pointer hover:bg-accent"
-          title={`^b ${s.key}`}>
-          {t(s.labelKey)}
         </button>
       ))}
 

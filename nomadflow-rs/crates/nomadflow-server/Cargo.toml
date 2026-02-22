@@ -7,8 +7,7 @@ edition = "2021"
 nomadflow-core = { path = "../nomadflow-core" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["rt"] }
-tokio-tungstenite = "0.26"
+tokio-util = { version = "0.7", features = ["rt", "codec"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -24,7 +23,7 @@ local-ip-address = "0.6"
 urlencoding = "2"
 rand = "0.9"
 subtle = "2"
-nomadflow-ws = { path = "../nomadflow-ws" }
+nomadflow-pty = { path = "../nomadflow-pty" }
 rust-embed = "8"
 mime_guess = "2"
 
@@ -33,3 +32,4 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = "1"
 tempfile = "3"
+tokio-tungstenite = "0.26"
