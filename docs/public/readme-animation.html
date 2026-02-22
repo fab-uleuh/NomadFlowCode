@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NomadFlow Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f17;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 40px;
+    gap: 48px;
+  }
+
+  /* ── Terminal ── */
+  .terminal {
+    width: 520px;
+    border-radius: 12px;
+    border: 1px solid #222;
+    background: #0a0a12;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(83, 54, 226, 0.15);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #111119;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+  .terminal-title {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: #555;
+    margin-left: 8px;
+  }
+  .terminal-body {
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #d4d4d8;
+    height: 500px;
+    overflow: hidden;
+    white-space: pre;
+  }
+
+  /* ── Phone mockup ── */
+  .phone {
+    width: 260px;
+    flex-shrink: 0;
+    border-radius: 40px;
+    border: 6px solid rgba(255,255,255,0.15);
+    background: #000;
+    padding: 8px;
+    box-shadow: 0 25px 50px rgba(83, 54, 226, 0.15);
+    position: relative;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 24px;
+    background: #000;
+    border-radius: 0 0 16px 16px;
+    z-index: 10;
+  }
+  .phone-screen {
+    border-radius: 34px;
+    overflow: hidden;
+    background: #000;
+  }
+  .phone-screen video,
+  .phone-screen img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* ── Colors ── */
+  .c-prompt { color: #34d399; }
+  .c-cmd { color: #fff; }
+  .c-dim { color: #71717a; }
+  .c-cyan { color: #22d3ee; }
+  .c-bold { color: #fff; font-weight: 600; }
+  .c-yellow { color: #fbbf24; }
+  .c-box { color: #5336E2; }
+  .c-qr { color: #fff; }
+  .c-green { color: #34d399; }
+  .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: #d4d4d8;
+    vertical-align: middle;
+    margin-left: 1px;
+  }
+  .cursor.off { background: transparent; }
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="terminal-bar">
+    <div class="dots">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+    </div>
+    <span class="terminal-title" id="term-title">nomadflow — setup</span>
+  </div>
+  <div class="terminal-body" id="term-body"></div>
+</div>
+
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="phone-screen">
+    <video autoplay loop muted playsinline id="phone-video">
+      <source src="/demo.mp4" type="video/mp4">
+    </video>
+  </div>
+</div>
+
+<script>
+const body = document.getElementById('term-body');
+const title = document.getElementById('term-title');
+let cursorVisible = true;
+
+setInterval(() => { cursorVisible = !cursorVisible; }, 530);
+
+const WIZARD = [
+  {
+    lines: [
+      ['cyan', 'Welcome to NomadFlow!'],
+      ['', ''],
+      ['bold', 'Set a password to secure your server:'],
+      ['', ''],
+      ['cyan', '> Generate a password (recommended)'],
+      ['dim', '  Enter my own password'],
+    ],
+    hold: 1500,
+  },
+  {
+    lines: [
+      ['bold', 'Will you use public tunnel mode? (y/n)'],
+      ['', ''],
+      ['dim', 'This exposes your server over the internet via a tunnel URL.'],
+    ],
+    hold: 1200,
+  },
+  {
+    lines: [
+      ['bold', 'Use a fixed subdomain for a stable public URL? (y/n)'],
+      ['', ''],
+      ['', '  Your subdomain: <span class="c-cyan">nf-fabien</span>'],
+      ['dim', '  -> https://nf-fabien.tunnel.nomadflowcode.dev'],
+      ['', ''],
+      ['dim', 'y: use this fixed subdomain  n: random URL each time'],
+    ],
+    hold: 1500,
+  },
+  {
+    lines: [
+      ['cyan', 'Configuration summary:'],
+      ['', ''],
+      ['', '  Password:    <span class="c-yellow">k7Fp2xR···mQ9</span>'],
+      ['', '  Public mode: <span class="c-bold">yes</span>'],
+      ['', '  Subdomain:   <span class="c-bold">nf-fabien</span>'],
+      ['dim', '  Config: ~/.nomadflowcode/config.toml'],
+      ['', ''],
+      ['bold', 'Save and continue? (y/n)'],
+    ],
+    hold: 2000,
+  },
+];
+
+const SHELL = [
+  {
+    cmd: 'nomadflow link ~/my-project',
+    output: '<span class="c-dim">Linked my-project -> /Users/me/my-project</span>',
+    delay: 800,
+  },
+  {
+    cmd: 'nomadflow serve',
+    output: `
+  <span class="c-box">╔══════════════════════════════════════╗</span>
+  <span class="c-box">║</span>        <span class="c-bold">NomadFlow Server Ready</span>        <span class="c-box">║</span>
+  <span class="c-box">╠══════════════════════════════════════╣</span>
+  <span class="c-box">║</span>                                      <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">█▀▀▀▀▀█ ██ ██ █▀▀▀▀▀█</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">█ ███ █  █▀██ █ ███ █</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">█ ███ █ █▄ █▄ █ ███ █</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">▀▀▀▀▀▀▀ █ █ █ ▀▀▀▀▀▀▀</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">██▀█▄ ▀██▄▀██▀▄▀█▄██▀</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">█▀▀▀▀▀█ ▄█▀██ █ █ ▀▄▀</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">█ ███ █ █▄▀▄█▀▄▀███▀▀</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>        <span class="c-qr">▀▀▀▀▀▀▀ ▀  ▀ ▀▀▀ ▀ ▀▀</span>         <span class="c-box">║</span>
+  <span class="c-box">║</span>                                      <span class="c-box">║</span>
+  <span class="c-box">║</span>    <span class="c-dim">Scan this QR code from the app</span>    <span class="c-box">║</span>
+  <span class="c-box">║</span>    <span class="c-dim">or enter manually:</span>                <span class="c-box">║</span>
+  <span class="c-box">║</span>                                      <span class="c-box">║</span>
+  <span class="c-box">║</span>    <span class="c-dim">URL    :</span> <span class="c-green">http://192.168.1.42:8080</span> <span class="c-box">║</span>
+  <span class="c-box">║</span>    <span class="c-dim">Secret :</span> <span class="c-yellow">k7Fp2xR···mQ9</span>            <span class="c-box">║</span>
+  <span class="c-box">║</span>                                      <span class="c-box">║</span>
+  <span class="c-box">╚══════════════════════════════════════╝</span>`,
+    delay: 800,
+  },
+];
+
+const TYPE_SPEED = 45;
+const LINE_DELAY = 50;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function renderWizardScreen(screen) {
+  let html = '';
+  for (const [cls, text] of screen.lines) {
+    if (cls) {
+      html += `<span class="c-${cls}">${text}</span>\n`;
+    } else {
+      html += text + '\n';
+    }
+  }
+  html += `<span class="cursor" id="cur"></span>`;
+  body.innerHTML = html;
+}
+
+async function typeCommand(cmd) {
+  for (let i = 0; i <= cmd.length; i++) {
+    body.innerHTML += ''; // force reflow
+    const prev = body.innerHTML.replace(/<div class="typing">.*<\/div>$/s, '');
+    body.innerHTML = prev + `<div class="typing"><span class="c-prompt">$</span> <span class="c-cmd">${cmd.slice(0, i)}</span><span class="cursor" id="cur"></span></div>`;
+    await sleep(TYPE_SPEED);
+  }
+  await sleep(250);
+  // Commit line
+  const prev = body.innerHTML.replace(/<div class="typing">.*<\/div>$/s, '');
+  body.innerHTML = prev + `<span class="c-prompt">$</span> <span class="c-cmd">${cmd}</span>\n`;
+}
+
+async function showOutput(output) {
+  const lines = output.split('\n');
+  for (const line of lines) {
+    body.innerHTML += line + '\n';
+    await sleep(LINE_DELAY);
+  }
+}
+
+// Cursor blink
+setInterval(() => {
+  const cur = document.getElementById('cur');
+  if (cur) cur.style.background = cursorVisible ? '#d4d4d8' : 'transparent';
+}, 100);
+
+async function run() {
+  // Phase 1: Wizard
+  title.textContent = 'nomadflow — setup';
+  for (const screen of WIZARD) {
+    renderWizardScreen(screen);
+    await sleep(screen.hold);
+  }
+  await sleep(400);
+
+  // Phase 2: Shell
+  title.textContent = 'terminal';
+  body.innerHTML = '';
+
+  for (const step of SHELL) {
+    await sleep(step.delay);
+    await typeCommand(step.cmd);
+    await showOutput(step.output);
+  }
+
+  await sleep(5000);
+  run();
+}
+
+// Start video at the app part (skip camera scanning)
+const video = document.getElementById('phone-video');
+video.addEventListener('loadedmetadata', () => { video.currentTime = 8; });
+
+// Signal readiness and start
+window.__animationReady = true;
+run();
+</script>
+</body>
+</html>
