@@ -22,7 +22,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.fab-uleuh.nomadflowcode",
       "buildNumber": "11"
