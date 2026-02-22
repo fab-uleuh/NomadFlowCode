@@ -3,7 +3,7 @@ title: API Reference
 description: Complete HTTP API reference for the NomadFlowCode server.
 ---
 
-All API endpoints (except `/health`) require a `Authorization: Bearer <token>` header when `auth.secret` is configured. All request and response bodies use JSON with **camelCase** field names.
+All API endpoints (except `/health`) require authentication when `auth.secret` is configured. The server accepts both `Authorization: Bearer <token>` and `Authorization: Basic <base64>` headers. All request and response bodies use JSON with **camelCase** field names.
 
 ## Health check
 
@@ -119,7 +119,7 @@ Create a new feature branch with its own worktree and terminal session.
 ```json
 {
   "repoPath": "/home/user/.nomadflowcode/repos/my-project",
-  "featureName": "my-feature",
+  "branchName": "my-feature",
   "baseBranch": "main"
 }
 ```
@@ -127,7 +127,7 @@ Create a new feature branch with its own worktree and terminal session.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `repoPath` | string | yes | — | Path to the repository |
-| `featureName` | string | yes | — | Name for the new feature |
+| `branchName` | string | yes | — | Name for the new feature branch |
 | `baseBranch` | string | no | `"main"` | Branch to base the feature on |
 
 **Response:**
@@ -158,7 +158,7 @@ Switch to an existing feature's terminal session.
 {
   "switched": true,
   "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
-  "hasRunningProcess": false
+  "worktreeName": "my-feature"
 }
 ```
 
@@ -166,7 +166,296 @@ Switch to an existing feature's terminal session.
 |-------|------|-------------|
 | `switched` | boolean | Whether the switch was successful |
 | `worktreePath` | string | Path to the worktree |
-| `hasRunningProcess` | boolean | Whether the terminal session has a running foreground process |
+| `worktreeName` | string | Name of the worktree |
+
+### `POST /api/delete-feature`
+
+Delete a feature branch and its worktree.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project",
+  "featureName": "my-feature"
+}
+```
+
+**Response:**
+
+```json
+{
+  "deleted": true
+}
+```
+
+### `POST /api/list-branches`
+
+List all branches for a repository.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project"
+}
+```
+
+**Response:**
+
+```json
+{
+  "branches": ["main", "develop", "feature/login"],
+  "defaultBranch": "main"
+}
+```
+
+### `POST /api/attach-branch`
+
+Attach to an existing branch by creating a worktree for it.
+
+**Request body:**
+
+```json
+{
+  "repoPath": "/home/user/.nomadflowcode/repos/my-project",
+  "branchName": "feature/login"
+}
+```
+
+**Response:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/login",
+  "branch": "feature/login",
+  "worktreeName": "login"
+}
+```
+
+## Sessions
+
+### `POST /api/list-sessions`
+
+List all active PTY sessions.
+
+**Request body:** none (empty or `{}`)
+
+**Response:**
+
+```json
+{
+  "sessions": [
+    {
+      "id": "abc123",
+      "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+      "agentType": "shell"
+    }
+  ]
+}
+```
+
+### `POST /api/create-session`
+
+Create a new PTY session in a worktree.
+
+**Request body:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "agentType": "shell"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `worktreePath` | string | yes | Path to the worktree directory |
+| `agentType` | string | no | Type of agent session (default: `"shell"`) |
+
+**Response:**
+
+```json
+{
+  "session": {
+    "id": "abc123",
+    "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+    "agentType": "shell"
+  }
+}
+```
+
+### `POST /api/select-session`
+
+Select an active session as the current session.
+
+**Request body:**
+
+```json
+{
+  "sessionId": "abc123"
+}
+```
+
+**Response:**
+
+```json
+{
+  "selected": true
+}
+```
+
+### `POST /api/close-session`
+
+Close an active PTY session.
+
+**Request body:**
+
+```json
+{
+  "sessionId": "abc123"
+}
+```
+
+**Response:**
+
+```json
+{
+  "closed": true
+}
+```
+
+## File operations
+
+### `POST /api/worktree-status`
+
+Get the git status of a worktree (modified, added, deleted files).
+
+**Request body:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature"
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": [
+    { "path": "src/main.rs", "status": "modified" },
+    { "path": "src/new.rs", "status": "added" }
+  ]
+}
+```
+
+### `POST /api/file-diff`
+
+Get the git diff for a specific file in a worktree.
+
+**Request body:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "filePath": "src/main.rs"
+}
+```
+
+**Response:**
+
+```json
+{
+  "diff": "--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,3 +1,4 @@\n..."
+}
+```
+
+### `POST /api/file-content`
+
+Read the content of a file in a worktree.
+
+**Request body:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "filePath": "src/main.rs"
+}
+```
+
+**Response:**
+
+```json
+{
+  "filePath": "src/main.rs",
+  "content": "fn main() {\n    println!(\"Hello\");\n}\n"
+}
+```
+
+### `POST /api/list-dir`
+
+List the contents of a directory in a worktree.
+
+**Request body:**
+
+```json
+{
+  "worktreePath": "/home/user/.nomadflowcode/worktrees/my-project/my-feature",
+  "relativePath": "src"
+}
+```
+
+**Response:**
+
+```json
+{
+  "files": ["main.rs", "lib.rs"],
+  "directories": ["models", "services"]
+}
+```
+
+## Panes
+
+### `POST /api/list-panes`
+
+List all active PTY panes.
+
+**Request body:** none (empty or `{}`)
+
+**Response:**
+
+```json
+{
+  "panes": [
+    {
+      "id": 1,
+      "repo": "my-project",
+      "worktree": "my-feature"
+    }
+  ]
+}
+```
+
+### `POST /api/destroy-pane`
+
+Destroy an active PTY pane.
+
+**Request body:**
+
+```json
+{
+  "paneId": 1
+}
+```
+
+**Response:**
+
+```json
+{
+  "destroyed": true
+}
+```
 
 ## Terminal WebSocket
 
@@ -174,16 +463,26 @@ Switch to an existing feature's terminal session.
 
 The central WebSocket endpoint for all terminal communication. Supports multiplexing multiple panes over a single connection.
 
-**Query parameters:**
+**Authentication:**
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| `token` | when `auth.secret` is set | The shared secret for authentication |
+| Method | Description |
+|--------|-------------|
+| Query parameter | `?token=<secret>` |
+| Subprotocol header | `Sec-WebSocket-Protocol: bearer.<secret>` |
 
-**Protocol:** Binary framing with custom multiplexing. Supports control messages (create, destroy, subscribe) and raw PTY data.
+The subprotocol method is preferred as it avoids exposing the secret in URLs/logs. When using the subprotocol, the server echoes back the protocol in its response header to complete the handshake.
 
-**Example:**
+**Example (query parameter):**
 
 ```
 ws://your-server:8080/ws/panes?token=your-secret
 ```
+
+**Example (subprotocol):**
+
+```
+GET /ws/panes HTTP/1.1
+Sec-WebSocket-Protocol: bearer.your-secret
+```
+
+**Protocol:** Binary framing with custom multiplexing. Supports control messages (create, destroy, subscribe) and raw PTY data.

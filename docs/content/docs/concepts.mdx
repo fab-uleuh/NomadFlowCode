@@ -5,16 +5,18 @@ description: Architecture, git worktrees, PTY sessions, and how they fit togethe
 
 ## Architecture
 
-NomadFlowCode is built as a Rust workspace with four core crates:
+NomadFlowCode is built as a Rust workspace with six crates:
 
 | Crate | Role |
 |-------|------|
 | `nomadflow-core` | Configuration, data models, shell utilities, git services |
-| `nomadflow-pty` | Binary protocol definitions and PTY handling logic |
-| `nomadflow-server` | Axum HTTP server, authentication, and multiplexed WebSocket |
+| `nomadflow-pty` | Native PTY spawning, pane management, and terminal state |
+| `nomadflow-ws` | WebSocket protocol definitions and binary framing |
+| `nomadflow-server` | Axum HTTP server, authentication, and API routes |
 | `nomadflow-tui` | Ratatui TUI wizard for interactive setup |
+| `nomadflow-relay` | Standalone relay server for public tunnel subdomain routing |
 
-All crates compile into a single `nomadflow` binary.
+All crates (except `nomadflow-relay`) compile into a single `nomadflow` binary. The relay is a separate binary deployed on a VPS.
 
 ## Git worktrees
 
@@ -22,7 +24,7 @@ Instead of switching branches in a single working directory, NomadFlowCode uses 
 
 ```
 ~/.nomadflowcode/
-  repos/           # bare clones
+  repos/           # symlinks (via `link`) or cloned repositories
     my-project/
   worktrees/        # one directory per feature
     my-project/
@@ -30,7 +32,7 @@ Instead of switching branches in a single working directory, NomadFlowCode uses 
       feature-b/
 ```
 
-This means you can have multiple features checked out simultaneously without stashing or losing state.
+Repositories appear in `repos/` either as symlinks to existing projects (created by `nomadflow link`) or as cloned repositories (created via the `clone-repo` API). This means you can have multiple features checked out simultaneously without stashing or losing state.
 
 ## Terminal sessions (PTY)
 
@@ -54,10 +56,10 @@ All terminal communication happens over a single WebSocket connection at `/ws/pa
 ```
 Mobile App
   │
-  ├─ API requests ──► Bearer token in Authorization header
+  ├─ API requests ──► Bearer token OR Basic Auth in Authorization header
   │                    Server validates against auth.secret
   │
-  └─ Terminal WS ───► /ws/panes?token=<secret>
+  └─ Terminal WS ───► /ws/panes with Sec-WebSocket-Protocol: bearer.<secret>
                        Multiplexed binary protocol
 ```
 
@@ -65,8 +67,8 @@ Mobile App
 
 ```
 ~/.nomadflowcode/
-  config.toml       # server configuration
-  repos/            # bare git clones
+  config.toml       # server configuration (auto-created by setup wizard)
+  repos/            # symlinks or cloned repositories
   worktrees/        # checked-out worktrees per feature
   sessions/         # agent state tracking data
 ```

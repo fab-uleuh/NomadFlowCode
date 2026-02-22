@@ -19,7 +19,7 @@ nomadflow [OPTIONS] [COMMAND]
 nomadflow
 ```
 
-Starts the HTTP server in the background, then launches the **TUI wizard**. When the TUI exits, the server is gracefully shut down. The TUI allows managing PTY sessions and worktrees interactively.
+Starts the HTTP server in the background, then launches the **TUI wizard**. On first run, the TUI begins with the **setup wizard** to create `~/.nomadflowcode/config.toml`. When the TUI exits, the server is gracefully shut down.
 
 ### `serve`
 
@@ -27,7 +27,7 @@ Starts the HTTP server in the background, then launches the **TUI wizard**. When
 nomadflow serve [--public] [--host <address>] [--port <port>]
 ```
 
-Runs the HTTP server in the **foreground** with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services.
+Runs the HTTP server in the **foreground** with full tracing/logging enabled. Use this for headless deployments, Docker containers, or systemd services. If no config exists, the setup wizard runs first.
 
 | Option | Description |
 |--------|-------------|
@@ -88,16 +88,6 @@ nomadflow unlink [<name>]
 
 Removes a previously linked repository from NomadFlow. If no name is given, shows a picker.
 
-## Options
-
-### `--status`
-
-```bash
-nomadflow --status
-```
-
-Displays the current **daemon status** (running/not running, PID) and the **active PTY panes** (repo, worktree, agent type), then exits.
-
 ### `attach`
 
 ```bash
@@ -110,11 +100,23 @@ Attaches to a server-managed PTY pane via a Unix socket. This provides a native 
 |--------|-------------|
 | `--pane <id>` | (Optional) The numeric ID of the pane to attach to. If omitted, shows an interactive picker. |
 
+## Options
+
+### `--status`
+
+```bash
+nomadflow --status
+```
+
+Displays the current **daemon status** (running/not running, PID) and the **active PTY panes** (repo, worktree, agent type), then exits.
+
 ## TUI wizard
 
 When running in default mode, the TUI provides an interactive terminal interface with the following screens:
 
-- **Session picker** — quick resume of active PTY sessions
+- **Setup wizard** — first-run configuration: choose password, enable tunnel, set subdomain
+- **Resume** — quick recall of the last active session
+- **Session picker** — list and resume active PTY sessions
 - **Server list** — manage remote server connections
 - **Add server** — multi-step form: name, URL, token, confirmation
 - **Repository browser** — list and select repos

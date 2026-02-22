@@ -28,49 +28,48 @@ cp target/release/nomadflow ~/.local/bin/
 
 ## Quick start
 
-### 1. Create a config (optional)
-
-NomadFlowCode works with sensible defaults. To customize, create `~/.nomadflowcode/config.toml`:
-
-```toml
-version = 1
-
-[paths]
-base_dir = "~/.nomadflowcode"
-
-[api]
-port = 8080
-host = "0.0.0.0"
-
-[web]
-port = 3000
-
-[auth]
-secret = "your-secret-token"
-```
-
-### 2. Start the server
+### 1. Initialize
 
 ```bash
-# Default mode: starts the server + TUI wizard
 nomadflow
-
-# Server-only mode in foreground (headless/Docker)
-nomadflow serve
-
-# Or run as a background daemon
-nomadflow start
-
-# Stop the daemon later with
-nomadflow stop
 ```
 
-### 3. Connect from your phone
+On first run, NomadFlowCode launches a **setup wizard** (TUI) that creates `~/.nomadflowcode/config.toml`. The wizard walks you through:
 
-1. Install the NomadFlowCode app (Expo dev build or standalone).
-2. Tap **Add Server**.
-3. Enter your server's URL (e.g. `http://192.168.1.100:8080`) and the auth token.
-4. Browse your repos, create features, and open the terminal.
+- Choosing or generating an **auth password** (secures your server)
+- Optionally enabling a **public tunnel** with a stable subdomain
+
+If a config already exists, it goes straight to the TUI home screen.
+
+### 2. Link a project
+
+```bash
+nomadflow link /path/to/my-project
+```
+
+This creates a symlink in `~/.nomadflowcode/repos/` pointing to your existing repository. You can link as many projects as you want. Alternatively, use `clone-repo` via the API to clone a new repository.
+
+### 3. Start the server
+
+```bash
+nomadflow serve
+```
+
+A **QR code** is displayed in the terminal along with your server URL and auth secret. For remote access from anywhere, use the public tunnel:
+
+```bash
+nomadflow serve --public
+```
+
+This creates a secure tunnel at `https://<subdomain>.tunnel.nomadflowcode.dev` — no VPN or port forwarding needed.
+
+### 4. Connect from your phone
+
+Scan the **QR code** from the NomadFlowCode app. That's it — you're connected.
+
+The QR code encodes a deep link (`nomadflowcode://add-server?url=...&secret=...`) that the app handles automatically, so there's nothing to type.
+
+You can also add a server manually: tap **Add Server**, enter the URL and auth secret, and save.
 
 ## What's next?
 

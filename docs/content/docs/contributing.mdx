@@ -12,8 +12,11 @@ NomadFlowCode/
   nomadflow-rs/        # Rust binary (server + TUI)
     crates/
       nomadflow-core/    # config, models, services
+      nomadflow-pty/     # native PTY spawning and pane management
+      nomadflow-ws/      # WebSocket protocol and binary framing
       nomadflow-server/  # axum HTTP server
       nomadflow-tui/     # ratatui TUI wizard
+      nomadflow-relay/   # standalone relay server for tunnel routing
     src/main.rs          # binary entry point
   nomadflowcode/       # React Native/Expo mobile app
   docs/                # Documentation site (fumadocs/Next.js)
@@ -35,11 +38,11 @@ Requirements: Rust toolchain, git.
 
 ```bash
 cd nomadflowcode
-npm install
+pnpm install
 npx expo run:ios    # or run:android
 ```
 
-Requirements: Node.js, Expo CLI, Xcode (iOS) or Android Studio.
+Requirements: Node.js, pnpm, Expo CLI, Xcode (iOS) or Android Studio.
 
 ### Documentation
 

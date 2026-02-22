@@ -33,7 +33,7 @@ Output:
   ╚══════════════════════════════════════════════╝
 ```
 
-The QR code encodes a deep link (`nomadflowcode://connect?url=...&secret=...`) that the mobile app handles automatically.
+The QR code encodes a deep link (`nomadflowcode://add-server?url=...&secret=...`) that the mobile app handles automatically.
 
 ## Architecture
 
@@ -121,7 +121,7 @@ See [Configuration — `[tunnel]`](/docs/server/configuration#tunnel) for all op
 - **The QR code contains your auth secret**: Anyone who can see your terminal output or photograph the QR code can extract your server URL and secret. Use `--public` in trusted environments.
 - **Tunnels are ephemeral**: Subdomain mappings live in memory on the relay server. They expire after 24 hours and are lost on relay restart.
 - **Rate limiting**: The relay limits each IP to 3 active tunnels and 10 registrations per hour.
-- **Timing-safe comparison**: Auth token comparison uses standard `==`, not constant-time comparison. Acceptable for a local dev tool; not suitable for high-security production use.
+- **Constant-time comparison**: Auth token comparison uses `subtle::ConstantTimeEq` for timing-safe validation.
 
 ### Recommendations
 

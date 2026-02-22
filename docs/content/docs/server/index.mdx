@@ -9,8 +9,8 @@ The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP ser
 
 | Command | Behavior |
 |---------|----------|
-| `nomadflow` | Starts the server in the background, then launches the TUI wizard. Server stops gracefully when TUI exits. |
-| `nomadflow serve` | Server-only mode in foreground with full tracing/logging. Ideal for headless or Docker deployments. Handles Ctrl+C and SIGTERM gracefully. |
+| `nomadflow` | Starts the server in the background, then launches the TUI wizard. On first run, the **setup wizard** creates `config.toml`. Server stops gracefully when TUI exits. |
+| `nomadflow serve` | Server-only mode in foreground with full tracing/logging. If no config exists, runs the setup wizard first. Ideal for headless or Docker deployments. Handles Ctrl+C and SIGTERM gracefully. |
 | `nomadflow serve --port 9090` | Same as `serve`, with the API port overridden (default from config: `8080`). |
 | `nomadflow serve --public` | Same as `serve`, but also opens a public tunnel via `*.tunnel.nomadflowcode.dev`. Displays a QR code for instant mobile connection. See [Public Tunnel](/docs/server/tunnel). |
 | `nomadflow web` | Starts a lightweight dashboard server and opens it in the browser (default port from config: `3000`). |
@@ -21,12 +21,13 @@ The NomadFlowCode server is an [Axum](https://github.com/tokio-rs/axum) HTTP ser
 
 When the server starts, it:
 
-1. **Loads configuration** from `~/.nomadflowcode/config.toml` (falls back to defaults).
-2. **Creates directories** — `~/.nomadflowcode/repos/`, `~/.nomadflowcode/worktrees/`, and `~/.nomadflowcode/sessions/`.
-3. **Initializes PaneManager** — the central registry for native PTY panes.
-4. **Starts AgentStateService** — installs and initializes agent tracking hooks.
-5. **Binds the HTTP server** on the configured host and port (default `0.0.0.0:8080`).
-6. **Starts Unix socket listener** — listens on `~/.nomadflowcode/nomadflow.sock` for local CLI `attach`.
+1. **Runs setup wizard** (if no `~/.nomadflowcode/config.toml` exists) — choose a password, optionally enable tunnel.
+2. **Loads configuration** from `~/.nomadflowcode/config.toml` (falls back to defaults).
+3. **Creates directories** — `~/.nomadflowcode/repos/`, `~/.nomadflowcode/worktrees/`, and `~/.nomadflowcode/sessions/`.
+4. **Initializes PaneManager** — the central registry for native PTY panes.
+5. **Starts AgentStateService** — installs and initializes agent tracking hooks.
+6. **Binds the HTTP server** on the configured host and port (default `0.0.0.0:8080`).
+7. **Starts Unix socket listener** — listens on `~/.nomadflowcode/nomadflow.sock` for local CLI `attach`.
 
 ## Graceful shutdown
 
@@ -42,8 +43,8 @@ This applies to all modes: `serve` (foreground), `start`/`stop` (daemon), and th
 ## Routes
 
 - `GET /health` — health check (no auth)
-- `POST /api/*` — repo, feature, and pane management (Bearer auth)
-- `GET /ws/panes` — multiplexed WebSocket for terminal access (token query param auth)
+- `POST /api/*` — repo, feature, session, file, and pane management (Bearer or Basic auth)
+- `GET /ws/panes` — multiplexed WebSocket for terminal access (token query param or subprotocol auth)
 
 See [API Reference](/docs/server/api) for full details.
 

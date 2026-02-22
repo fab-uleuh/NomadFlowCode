@@ -17,7 +17,7 @@ The NomadFlowCode mobile app is built with [Expo](https://expo.dev) and React Na
 
 ```bash
 cd nomadflowcode
-npm install    # or pnpm install
+pnpm install
 npx expo run:ios
 # or
 npx expo run:android
@@ -29,6 +29,18 @@ The app uses native WebView features that may not be fully supported in Expo Go.
 
 ## Adding a server
 
+### QR code scanning (recommended)
+
+The fastest way to connect is to scan the **QR code** displayed by the server:
+
+1. Start the server with `nomadflow serve` (or `nomadflow serve --public` for remote access).
+2. Open the NomadFlowCode app and tap **Scan QR Code**.
+3. Point your camera at the QR code in your terminal. Done.
+
+The QR code encodes a deep link (`nomadflowcode://add-server?url=...&secret=...`) that the app handles automatically — no manual entry required.
+
+### Manual entry
+
 1. Open the app and tap **Add Server** (or the `+` button).
 2. Enter the server details:
    - **Name** — a friendly label (e.g. "Home Server")
@@ -36,12 +48,10 @@ The app uses native WebView features that may not be fully supported in Expo Go.
    - **Auth Token** — the `auth.secret` from your server's `config.toml`
 3. Tap **Save**. The app will test the connection via the `/health` endpoint.
 
-![Add server screen](/screenshots/add-server.png)
-
 ## Connection
 
 The app communicates with the server over:
 - **HTTP** — REST API calls to `/api/*` endpoints with Bearer token auth
-- **WebSocket** — terminal data via `/ws/panes?token=<secret>` using a binary multiplexed protocol.
+- **WebSocket** — terminal data via `/ws/panes` using a binary multiplexed protocol, authenticated via `Sec-WebSocket-Protocol: bearer.<secret>`.
 
 Server configuration is stored locally on the device and persists across app restarts.

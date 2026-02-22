@@ -5,6 +5,10 @@ description: Full reference for the NomadFlowCode config.toml file.
 
 NomadFlowCode reads its configuration from `~/.nomadflowcode/config.toml`. All fields are optional — sensible defaults are used when omitted.
 
+On first run, the **setup wizard** automatically creates this file. Running `nomadflow` or `nomadflow serve` without an existing config triggers the wizard, which walks you through setting a password and optionally enabling the public tunnel.
+
+When running `nomadflow serve` with an empty `auth.secret`, a random secret is auto-generated for the session and displayed in the terminal output.
+
 ## Full example
 
 ```toml
@@ -42,7 +46,7 @@ subdomain = "fabien"
 | `base_dir` | string | `~/.nomadflowcode` | Base directory for repos, worktrees, and config. `~` is expanded to the user's home. |
 
 The following subdirectories are created automatically:
-- `{base_dir}/repos/` — bare git clones
+- `{base_dir}/repos/` — symlinks or cloned repositories
 - `{base_dir}/worktrees/` — checked-out worktrees per feature
 - `{base_dir}/sessions/` — agent state tracking data
 
@@ -67,11 +71,13 @@ Can be overridden at runtime with `nomadflow web --port <port>`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `secret` | string | `""` (empty) | Shared secret for API and terminal authentication. When empty, auth is disabled. |
+| `secret` | string | `""` (empty) | Shared secret for API and terminal authentication. When empty, auth is disabled (or auto-generated in `serve` mode). |
 
 When set, this secret is used as:
 - **Bearer token** for API requests (`Authorization: Bearer <secret>`)
+- **Basic Auth password** for API requests (`Authorization: Basic base64(user:secret)`)
 - **Query parameter** for WebSocket connection (`/ws/panes?token=<secret>`)
+- **Subprotocol** for WebSocket connection (`Sec-WebSocket-Protocol: bearer.<secret>`)
 
 ### `[tunnel]`
 

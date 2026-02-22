@@ -7,18 +7,20 @@ NomadFlowCode uses a simple shared-secret model. A single `auth.secret` value in
 
 ## Setup
 
-Set the secret in your configuration file:
+Set the secret in your configuration file (or let the setup wizard generate one for you on first run):
 
 ```toml
 [auth]
 secret = "your-secret-token"
 ```
 
-When `secret` is empty (the default), authentication is disabled entirely.
+When `secret` is empty (the default), authentication is disabled entirely. When running `nomadflow serve` with an empty secret, one is auto-generated for the session.
 
 ## API authentication
 
-All `/api/*` endpoints require a Bearer token:
+### Bearer token
+
+All `/api/*` endpoints accept a Bearer token:
 
 ```bash
 curl -X POST http://localhost:8080/api/list-repos \
@@ -26,24 +28,51 @@ curl -X POST http://localhost:8080/api/list-repos \
   -H "Content-Type: application/json"
 ```
 
-The server middleware checks the `Authorization` header against `auth.secret`. Requests without a valid token receive a `401 Unauthorized` response.
+### Basic Auth
+
+The server also accepts HTTP Basic Authentication. The **password** is checked against `auth.secret` (the username is ignored):
+
+```bash
+curl -X POST http://localhost:8080/api/list-repos \
+  -u "nomadflow:your-secret-token" \
+  -H "Content-Type: application/json"
+```
+
+Basic Auth is particularly useful for WebView-based terminal access, where the browser handles credential prompts automatically. The server includes a `WWW-Authenticate: Basic` header in 401 responses to trigger the browser's native auth dialog.
 
 ## Terminal WebSocket authentication
 
-Terminal communication uses a multiplexed WebSocket at `/ws/panes`. Because many environments (including mobile WebViews) have limited control over WebSocket upgrade headers, authentication is handled via a query parameter:
+Terminal communication uses a multiplexed WebSocket at `/ws/panes`. Two authentication methods are supported:
+
+### Query parameter
 
 ```
 ws://your-server:8080/ws/panes?token=your-secret-token
 ```
 
+### Subprotocol header (preferred)
+
+```
+Sec-WebSocket-Protocol: bearer.your-secret-token
+```
+
+The subprotocol method is preferred because it avoids exposing the secret in URLs and server logs. The server echoes back the protocol in its upgrade response to complete the WebSocket handshake.
+
 The server:
-1. Validates the `token` query parameter against `auth.secret`
+1. Validates the token (from query param or subprotocol) against `auth.secret`
 2. Upgrades the connection if valid
-3. Rejects invalid tokens with a `401 Unauthorized` status before the upgrade completes.
+3. Rejects invalid tokens with a `401 Unauthorized` status before the upgrade completes
+
+## Security notes
+
+- All token comparisons use **constant-time comparison** via `subtle::ConstantTimeEq` to prevent timing attacks.
+- When using `--public` (tunnel mode), all traffic is encrypted via TLS. The auth secret adds a second layer of protection.
 
 ## Summary
 
 | Channel | Auth method | Header/param |
 |---------|------------|--------------|
 | API (`/api/*`) | Bearer token | `Authorization: Bearer <secret>` |
+| API (`/api/*`) | Basic Auth | `Authorization: Basic base64(user:password)` |
 | WebSocket (`/ws/panes`) | Query param | `?token=<secret>` |
+| WebSocket (`/ws/panes`) | Subprotocol | `Sec-WebSocket-Protocol: bearer.<secret>` |
