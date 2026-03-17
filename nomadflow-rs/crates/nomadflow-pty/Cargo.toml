@@ -6,6 +6,7 @@ description = "PTY actor with headless terminal emulation for NomadFlow"
 license = "MIT"
 
 [dependencies]
+nomadflow-core = { path = "../nomadflow-core" }
 pty-process = { version = "0.5", features = ["async"] }
 alacritty_terminal = "0.25"
 tokio = { version = "1", features = ["full"] }

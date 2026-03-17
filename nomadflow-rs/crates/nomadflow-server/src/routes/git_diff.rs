@@ -2,38 +2,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use nomadflow_core::models::{
     FileContentRequest, FileContentResponse, FileDiffRequest, FileDiffResponse,
     WorktreeStatusRequest, WorktreeStatusResponse,
 };
 
+use super::{map_error, map_join_error};
 use crate::state::AppState;
-
-fn map_error(e: nomadflow_core::error::NomadError) -> (StatusCode, Json<Value>) {
-    match &e {
-        nomadflow_core::error::NomadError::NotFound(_) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({ "detail": e.to_string() })),
-        ),
-        nomadflow_core::error::NomadError::InvalidInput(_) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "detail": e.to_string() })),
-        ),
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": e.to_string() })),
-        ),
-    }
-}
-
-fn map_join_error(e: tokio::task::JoinError) -> (StatusCode, Json<Value>) {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({ "detail": e.to_string() })),
-    )
-}
 
 async fn worktree_status(
     State(state): State<Arc<AppState>>,

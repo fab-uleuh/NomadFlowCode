@@ -4,9 +4,8 @@ use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use serde_json::{json, Value};
 
 use nomadflow_core::models::{
-    AgentStateKind, CloseSessionRequest, CloseSessionResponse, CreateSessionRequest,
-    CreateSessionResponse, ListSessionsResponse, SelectSessionRequest, SelectSessionResponse,
-    SessionWithState,
+    CloseSessionRequest, CloseSessionResponse, CreateSessionRequest,
+    CreateSessionResponse, ListSessionsResponse, SessionWithState,
 };
 use nomadflow_pty::types::{CreatePaneRequest, PaneId};
 
@@ -21,16 +20,6 @@ async fn list_sessions(
     let sessions: Vec<SessionWithState> = panes
         .iter()
         .map(|info| {
-            let _session_id = format!("{}-{}-{}", info.repo, info.worktree, info.agent_number);
-            let agent_state = match info.agent_state {
-                nomadflow_pty::types::AgentStateKind::WaitingForInput => AgentStateKind::WaitingForInput,
-                nomadflow_pty::types::AgentStateKind::WaitingForPermission => AgentStateKind::WaitingForPermission,
-                nomadflow_pty::types::AgentStateKind::Generating => AgentStateKind::Generating,
-                nomadflow_pty::types::AgentStateKind::Idle => AgentStateKind::Idle,
-                nomadflow_pty::types::AgentStateKind::Done => AgentStateKind::Done,
-                nomadflow_pty::types::AgentStateKind::Error => AgentStateKind::Error,
-                nomadflow_pty::types::AgentStateKind::Unknown => AgentStateKind::Unknown,
-            };
             SessionWithState {
                 session_id: info.id.0.to_string(),
                 window_name: info.label.0.clone(),
@@ -38,7 +27,7 @@ async fn list_sessions(
                 worktree: info.worktree.clone(),
                 agent_type: info.agent_type.clone(),
                 agent_number: info.agent_number as u32,
-                agent_state,
+                agent_state: info.agent_state,
                 state_timestamp: None,
             }
         })
@@ -119,22 +108,6 @@ async fn create_session(
     }))
 }
 
-async fn select_session(
-    State(_state): State<Arc<AppState>>,
-    Json(request): Json<SelectSessionRequest>,
-) -> Result<Json<SelectSessionResponse>, (StatusCode, Json<Value>)> {
-    // With PTY, session selection is handled client-side via WebSocket subscribe
-    // This endpoint just validates the pane exists
-    let _pane_id = request.session_id.parse::<u16>().map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "detail": "invalid session id" })),
-        )
-    })?;
-
-    Ok(Json(SelectSessionResponse { selected: true }))
-}
-
 async fn close_session(
     State(state): State<Arc<AppState>>,
     Json(request): Json<CloseSessionRequest>,
@@ -166,7 +139,6 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/list-sessions", post(list_sessions))
         .route("/api/create-session", post(create_session))
-        .route("/api/select-session", post(select_session))
         .route("/api/close-session", post(close_session))
 }
 
@@ -250,7 +222,7 @@ mod tests {
         let app = test_app(settings);
 
         let (hdr, val) = auth_header();
-        let body = json!({ "sessionId": "99999" });
+        let body = json!({ "sessionId": "9999" });
         let req = Request::builder()
             .method("POST")
             .uri("/api/close-session")

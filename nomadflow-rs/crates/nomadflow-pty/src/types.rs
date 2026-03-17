@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use alacritty_terminal::event::{Event, EventListener};
 use tokio::sync::{mpsc, oneshot};
 
-use serde::{Deserialize, Serialize};
+/// Re-export AgentStateKind from nomadflow-core (single source of truth).
+pub use nomadflow_core::models::AgentStateKind;
 
 /// Unique identifier for a pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,19 +20,6 @@ impl fmt::Display for PaneId {
 /// Human-readable label for a pane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaneLabel(pub String);
-
-/// Agent state kind (matches nomadflow-core model).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentStateKind {
-    WaitingForInput,
-    WaitingForPermission,
-    Generating,
-    Idle,
-    Done,
-    Error,
-    Unknown,
-}
 
 /// Metadata about a pane.
 #[derive(Debug, Clone, PartialEq, Eq)]

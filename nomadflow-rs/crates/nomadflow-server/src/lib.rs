@@ -268,16 +268,7 @@ fn spawn_agent_state_watcher(state: Arc<AppState>, shutdown: CancellationToken) 
                         // Match pane to state file via CWD
                         match state.agent_state.get_state_by_cwd(&pane.cwd).await {
                             Ok(Some(current_state)) => {
-                                // Map nomadflow_core AgentStateKind to nomadflow_pty AgentStateKind
-                                let kind = match current_state.state {
-                                    nomadflow_core::models::AgentStateKind::WaitingForInput => nomadflow_pty::types::AgentStateKind::WaitingForInput,
-                                    nomadflow_core::models::AgentStateKind::WaitingForPermission => nomadflow_pty::types::AgentStateKind::WaitingForPermission,
-                                    nomadflow_core::models::AgentStateKind::Generating => nomadflow_pty::types::AgentStateKind::Generating,
-                                    nomadflow_core::models::AgentStateKind::Idle => nomadflow_pty::types::AgentStateKind::Idle,
-                                    nomadflow_core::models::AgentStateKind::Done => nomadflow_pty::types::AgentStateKind::Done,
-                                    nomadflow_core::models::AgentStateKind::Error => nomadflow_pty::types::AgentStateKind::Error,
-                                    nomadflow_core::models::AgentStateKind::Unknown => nomadflow_pty::types::AgentStateKind::Unknown,
-                                };
+                                let kind = current_state.state;
 
                                 if kind != pane.agent_state {
                                     // Update PaneManager
