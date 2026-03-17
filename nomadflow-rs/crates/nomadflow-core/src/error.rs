@@ -11,9 +11,6 @@ pub enum NomadError {
     #[error("Command failed: {0}")]
     CommandFailed(String),
 
-    #[error("Command timed out after {0}s")]
-    Timeout(f64),
-
     #[error("Configuration error: {0}")]
     Config(String),
 

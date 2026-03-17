@@ -1884,6 +1884,7 @@ dependencies = [
  "alacritty_terminal",
  "dirs",
  "futures-util",
+ "nomadflow-core",
  "pty-process",
  "serde",
  "serde_json",
@@ -1962,7 +1963,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "url",
 ]
 
 [[package]]

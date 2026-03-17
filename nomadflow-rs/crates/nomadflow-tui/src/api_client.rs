@@ -13,23 +13,6 @@ pub fn get_api_base_url(server: &ServerConfig) -> String {
     }
 }
 
-/// Check if a server is healthy.
-pub async fn check_health(server: &ServerConfig) -> bool {
-    let base = get_api_base_url(server).replace("/api", "");
-    let url = format!("{base}/health");
-
-    let client = reqwest::Client::new();
-    let mut req = client.get(&url).timeout(std::time::Duration::from_secs(3));
-    if let Some(ref token) = server.auth_token {
-        req = req.header("Authorization", format!("Bearer {token}"));
-    }
-
-    req.send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
-}
-
 /// List repos from the server.
 pub async fn list_repos(server: &ServerConfig) -> Result<Vec<Repository>, String> {
     let url = format!("{}/list-repos", get_api_base_url(server));

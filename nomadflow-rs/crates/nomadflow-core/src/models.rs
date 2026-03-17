@@ -223,21 +223,6 @@ pub struct CloseSessionResponse {
     pub closed: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SelectSessionRequest {
-    pub session_id: String,
-    /// Optional linked session name (e.g. "nomadflow-0") for independent cursor targeting.
-    /// When provided, select-window targets this linked session instead of the base session.
-    pub linked_session: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SelectSessionResponse {
-    pub selected: bool,
-}
-
 // ---- Agent state models ----
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

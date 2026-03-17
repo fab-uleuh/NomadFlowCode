@@ -11,7 +11,6 @@ pub struct CliState {
     pub last_server: Option<String>,
     pub last_repo: Option<String>,
     pub last_feature: Option<String>,
-    pub last_attached: Option<u64>,
 }
 
 /// Server configuration for the TUI (loaded from cli-servers.json).
@@ -37,15 +36,6 @@ pub fn load_state(settings: &Settings) -> CliState {
             .unwrap_or_default()
     } else {
         CliState::default()
-    }
-}
-
-pub fn save_state(settings: &Settings, state: &CliState) {
-    let base = settings.base_dir();
-    std::fs::create_dir_all(&base).ok();
-    let path = state_path(settings);
-    if let Ok(json) = serde_json::to_string_pretty(state) {
-        std::fs::write(path, json).ok();
     }
 }
 
@@ -95,6 +85,15 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn save_state(settings: &Settings, state: &CliState) {
+        let base = settings.base_dir();
+        std::fs::create_dir_all(&base).ok();
+        let path = state_path(settings);
+        if let Ok(json) = serde_json::to_string_pretty(state) {
+            std::fs::write(path, json).ok();
+        }
+    }
+
     #[test]
     fn test_save_and_load_state() {
         let tmp = TempDir::new().unwrap();
@@ -110,7 +109,6 @@ mod tests {
             last_server: Some("localhost".to_string()),
             last_repo: Some("/tmp/repo".to_string()),
             last_feature: Some("feat".to_string()),
-            last_attached: Some(12345),
         };
 
         save_state(&settings, &state);

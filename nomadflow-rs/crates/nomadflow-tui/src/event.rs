@@ -2,15 +2,13 @@ use std::time::Duration;
 
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 
-use nomadflow_core::models::{AgentStateKind, Feature, Repository};
+use nomadflow_core::models::{Feature, Repository};
 
 /// Application events combining terminal events and async results.
 #[derive(Debug)]
 pub enum AppEvent {
     /// Terminal key event.
     Key(KeyEvent),
-    /// Terminal tick (for animations/spinners).
-    Tick,
     /// Repos loaded from API.
     ReposLoaded(Result<Vec<Repository>, String>),
     /// Features loaded from API.
@@ -19,10 +17,6 @@ pub enum AppEvent {
     FeatureCreated(Result<String, String>),
     /// Switch feature completed.
     SwitchDone(Result<String, String>),
-    /// Health check result for a server.
-    HealthResult(String, bool),
-    /// Agent state refresh results: (window_name, state) pairs.
-    AgentStatesRefreshed(Vec<(String, AgentStateKind)>),
 }
 
 /// Poll for crossterm events with a timeout.

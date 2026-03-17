@@ -279,7 +279,7 @@ impl App {
         // Screen-specific keys
         match self.screen {
             Screen::Setup => self.handle_setup_key(code),
-            Screen::Resume => self.handle_resume_key(code, tx),
+            Screen::Resume => self.handle_resume_key(code),
             Screen::ServerPicker => self.handle_server_picker_key(code, tx),
             Screen::ServerAdd => self.handle_server_add_key(code),
             Screen::RepoPicker => self.handle_repo_picker_key(code, tx),
@@ -338,7 +338,6 @@ impl App {
     fn handle_resume_key(
         &mut self,
         code: KeyCode,
-        tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
     ) {
         match code {
             KeyCode::Up | KeyCode::Char('k') => {
@@ -353,8 +352,8 @@ impl App {
             }
             KeyCode::Enter => {
                 if self.selected_index == 0 {
-                    // Resume
-                    self.do_resume(tx);
+                    // Resume: go directly to server picker
+                    self.screen = Screen::ServerPicker;
                 } else {
                     // Skip to server picker
                     self.screen = Screen::ServerPicker;
@@ -858,7 +857,7 @@ impl App {
                     }
                 }
             }
-            _ => {}
+            AppEvent::Key(_) => {}
         }
     }
 
@@ -940,8 +939,4 @@ impl App {
         }
     }
 
-    fn do_resume(&mut self, _tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
-        // Resume functionality simplified for PTY mode
-        self.screen = Screen::ServerPicker;
-    }
 }
