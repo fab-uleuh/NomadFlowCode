@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod display;
+pub mod frame_handler;
 pub mod routes;
 pub mod socket;
 pub mod state;

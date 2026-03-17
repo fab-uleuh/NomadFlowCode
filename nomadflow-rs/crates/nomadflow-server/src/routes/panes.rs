@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -20,8 +19,9 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use nomadflow_pty::protocol::{ControlMsg, PaneInfoDto, WsFrame};
-use nomadflow_pty::{ClientId, PaneEvent, PaneId};
+use nomadflow_pty::{ClientId, PaneId};
 
+use crate::frame_handler::ForwardingTasks;
 use crate::state::AppState;
 
 static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
@@ -215,48 +215,6 @@ async fn ws_writer(
     }
 }
 
-/// Tracks active forwarding tasks per pane for a single client.
-struct ForwardingTasks {
-    tasks: HashMap<u16, tokio::task::JoinHandle<()>>,
-}
-
-impl ForwardingTasks {
-    fn new() -> Self {
-        Self {
-            tasks: HashMap::new(),
-        }
-    }
-
-    fn insert(&mut self, pane_id: u16, handle: tokio::task::JoinHandle<()>) {
-        if let Some(old) = self.tasks.insert(pane_id, handle) {
-            old.abort();
-        }
-    }
-
-    fn remove(&mut self, pane_id: u16) {
-        if let Some(handle) = self.tasks.remove(&pane_id) {
-            handle.abort();
-        }
-    }
-
-    /// Remove entries where the forwarding task has already finished (Task 4.2).
-    fn cleanup_finished(&mut self) {
-        self.tasks.retain(|_, handle| !handle.is_finished());
-    }
-
-    fn abort_all(&mut self) {
-        for (_, handle) in self.tasks.drain() {
-            handle.abort();
-        }
-    }
-}
-
-impl Drop for ForwardingTasks {
-    fn drop(&mut self) {
-        self.abort_all();
-    }
-}
-
 /// Main read loop: decodes WS binary frames and routes them.
 async fn client_reader(
     mut receiver: futures_util::stream::SplitStream<WebSocket>,
@@ -294,7 +252,7 @@ async fn client_reader(
                     }
                 };
 
-                handle_frame(
+                crate::frame_handler::handle_frame(
                     frame,
                     &state,
                     client_id,
@@ -312,224 +270,6 @@ async fn client_reader(
     forwarding.abort_all();
 }
 
-/// Process a single decoded frame.
-async fn handle_frame(
-    frame: WsFrame,
-    state: &Arc<AppState>,
-    client_id: ClientId,
-    write_tx: &mpsc::Sender<Vec<u8>>,
-    forwarding: &mut ForwardingTasks,
-) {
-    match frame {
-        WsFrame::PtyData { pane_id, data } => {
-            if let Err(e) = state
-                .pane_manager
-                .lock()
-                .await
-                .route_input(pane_id, data)
-                .await
-            {
-                warn!(%client_id, %pane_id, "route_input failed: {e}");
-            }
-        }
-
-        WsFrame::Resize {
-            pane_id,
-            cols,
-            rows,
-        } => {
-            if let Err(e) = state
-                .pane_manager
-                .lock()
-                .await
-                .resize_pane(pane_id, cols, rows)
-                .await
-            {
-                warn!(%client_id, %pane_id, "resize failed: {e}");
-            }
-        }
-
-        WsFrame::Control { payload } => {
-            handle_control(payload, state, client_id, write_tx, forwarding).await;
-        }
-
-        WsFrame::BufferSnapshot { .. } => {
-            // Server-to-client only, ignore from client.
-        }
-
-        WsFrame::Ping => {
-            let _ = write_tx.send(WsFrame::Ping.encode()).await;
-        }
-    }
-}
-
-/// Handle a control message.
-async fn handle_control(
-    msg: ControlMsg,
-    state: &Arc<AppState>,
-    client_id: ClientId,
-    write_tx: &mpsc::Sender<Vec<u8>>,
-    forwarding: &mut ForwardingTasks,
-) {
-    match msg {
-        ControlMsg::List => {
-            let panes = {
-                let mut manager = state.pane_manager.lock().await;
-                // Clean up dead panes before listing
-                manager.cleanup_dead_panes();
-                manager
-                    .list_panes()
-                    .iter()
-                    .map(PaneInfoDto::from)
-                    .collect::<Vec<_>>()
-            };
-            let resp = WsFrame::Control {
-                payload: ControlMsg::PaneList { panes },
-            };
-            let _ = write_tx.send(resp.encode()).await;
-        }
-
-        ControlMsg::Create(req) => {
-            let result = {
-                let mut manager = state.pane_manager.lock().await;
-                manager.create_pane(req.into())
-            };
-            match result {
-                Ok(info) => {
-                    let pane_id = info.id;
-                    let dto = PaneInfoDto::from(&info);
-
-                    // Auto-subscribe the creating client.
-                    let rx = {
-                        let mut manager = state.pane_manager.lock().await;
-                        manager.subscribe_client(client_id, pane_id)
-                    };
-
-                    if let Ok(rx) = rx {
-                        // Send buffer snapshot first.
-                        send_buffer_snapshot(state, pane_id, write_tx).await;
-
-                        // Start output forwarding.
-                        let handle = spawn_output_forwarder(pane_id, rx, write_tx.clone(), state.clone());
-                        forwarding.insert(pane_id.0, handle);
-                    }
-
-                    let resp = WsFrame::Control {
-                        payload: ControlMsg::PaneCreated(dto),
-                    };
-                    let _ = write_tx.send(resp.encode()).await;
-                }
-                Err(e) => {
-                    let resp = WsFrame::Control {
-                        payload: ControlMsg::Error {
-                            message: e.to_string(),
-                        },
-                    };
-                    let _ = write_tx.send(resp.encode()).await;
-                }
-            }
-        }
-
-        ControlMsg::Destroy { pane_id } => {
-            let (result, cwd) = {
-                let mut manager = state.pane_manager.lock().await;
-                let cwd = manager.get_pane_info(PaneId(pane_id)).map(|info| info.cwd.clone());
-                (manager.destroy_pane(PaneId(pane_id)), cwd)
-            };
-            match result {
-                Ok(()) => {
-                    if let Some(cwd) = cwd {
-                        state.agent_state.delete_state_file(&cwd).await;
-                    }
-                    forwarding.remove(pane_id);
-                    let resp = WsFrame::Control {
-                        payload: ControlMsg::PaneDestroyed {
-                            pane_id,
-                            exit_code: None,
-                        },
-                    };
-                    let _ = write_tx.send(resp.encode()).await;
-                }
-                Err(e) => {
-                    let resp = WsFrame::Control {
-                        payload: ControlMsg::Error {
-                            message: e.to_string(),
-                        },
-                    };
-                    let _ = write_tx.send(resp.encode()).await;
-                }
-            }
-        }
-
-        ControlMsg::Subscribe { pane_ids } => {
-            for pid in pane_ids {
-                let pane_id = PaneId(pid);
-                let rx = {
-                    let mut manager = state.pane_manager.lock().await;
-                    manager.subscribe_client(client_id, pane_id)
-                };
-                match rx {
-                    Ok(rx) => {
-                        // Send buffer snapshot before live stream.
-                        send_buffer_snapshot(state, pane_id, write_tx).await;
-
-                        let handle = spawn_output_forwarder(pane_id, rx, write_tx.clone(), state.clone());
-                        forwarding.insert(pid, handle);
-                    }
-                    Err(e) => {
-                        let resp = WsFrame::Control {
-                            payload: ControlMsg::Error {
-                                message: e.to_string(),
-                            },
-                        };
-                        let _ = write_tx.send(resp.encode()).await;
-                    }
-                }
-            }
-        }
-
-        ControlMsg::Unsubscribe { pane_ids } => {
-            let mut manager = state.pane_manager.lock().await;
-            for pid in pane_ids {
-                manager.unsubscribe_client(client_id, PaneId(pid));
-                forwarding.remove(pid);
-            }
-        }
-
-        // Server-to-client only messages — ignore if sent by client.
-        ControlMsg::PaneList { .. }
-        | ControlMsg::Error { .. }
-        | ControlMsg::PaneCreated(_)
-        | ControlMsg::PaneDestroyed { .. }
-        | ControlMsg::PaneStateUpdated { .. } => {}
-    }
-}
-
-/// Send a buffer snapshot for a pane to the client.
-async fn send_buffer_snapshot(
-    state: &Arc<AppState>,
-    pane_id: PaneId,
-    write_tx: &mpsc::Sender<Vec<u8>>,
-) {
-    // Hold the lock for the entire async call — tokio::sync::Mutex supports this.
-    let snapshot = state
-        .pane_manager
-        .lock()
-        .await
-        .get_buffer_snapshot(pane_id)
-        .await;
-
-    match snapshot {
-        Ok(data) => {
-            let frame = WsFrame::BufferSnapshot { pane_id, data };
-            let _ = write_tx.send(frame.encode()).await;
-        }
-        Err(e) => {
-            warn!(%pane_id, "Failed to get buffer snapshot: {e}");
-        }
-    }
-}
-
 /// Start a test server on a random port and return the address.
 #[cfg(test)]
 async fn start_test_server(secret: &str) -> std::net::SocketAddr {
@@ -545,88 +285,6 @@ async fn start_test_server(secret: &str) -> std::net::SocketAddr {
         axum::serve(listener, app).await.unwrap();
     });
     addr
-}
-
-/// Spawn a task that forwards PaneEvents from a broadcast receiver to the WS writer.
-fn spawn_output_forwarder(
-    pane_id: PaneId,
-    mut rx: tokio::sync::broadcast::Receiver<PaneEvent>,
-    write_tx: mpsc::Sender<Vec<u8>>,
-    state: Arc<AppState>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    let frame = match event {
-                        PaneEvent::Output {
-                            pane_id: pid,
-                            data,
-                        } => WsFrame::PtyData {
-                            pane_id: pid,
-                            data,
-                        },
-                        PaneEvent::Exited {
-                            pane_id: pid,
-                            code,
-                        } => {
-                            // Auto-cleanup: remove dead pane from manager registry
-                            {
-                                let mut manager = state.pane_manager.lock().await;
-                                let _ = manager.destroy_pane(pid);
-                            }
-                            let ctrl = WsFrame::Control {
-                                payload: ControlMsg::PaneDestroyed {
-                                    pane_id: pid.0,
-                                    exit_code: Some(code),
-                                },
-                            };
-                            let _ = write_tx.send(ctrl.encode()).await;
-                            break;
-                        }
-                        PaneEvent::TitleChanged { .. } => continue,
-                    };
-                    if write_tx.send(frame.encode()).await.is_err() {
-                        break; // WS sender closed
-                    }
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    // Task 4.3: Send a buffer snapshot so the client can recover from the gap.
-                    warn!(%pane_id, "Client lagged, missed {n} messages — sending buffer snapshot for recovery");
-                    let snapshot = state
-                        .pane_manager
-                        .lock()
-                        .await
-                        .get_buffer_snapshot(pane_id)
-                        .await;
-                    match snapshot {
-                        Ok(data) => {
-                            let frame = WsFrame::BufferSnapshot { pane_id, data };
-                            if write_tx.send(frame.encode()).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            warn!(%pane_id, "Failed to get recovery snapshot: {e}");
-                            // Pane may have been destroyed — continue and let next recv handle it
-                        }
-                    }
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    // Task 4.4: Broadcast channel closed (pane destroyed by another client).
-                    // Notify this client that the pane is gone.
-                    let ctrl = WsFrame::Control {
-                        payload: ControlMsg::PaneDestroyed {
-                            pane_id: pane_id.0,
-                            exit_code: None,
-                        },
-                    };
-                    let _ = write_tx.send(ctrl.encode()).await;
-                    break;
-                }
-            }
-        }
-    })
 }
 
 #[cfg(test)]
