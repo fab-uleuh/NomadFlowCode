@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Text } from '@/components/ui/text';
 import { useStorage } from '@/lib/context/storage-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';

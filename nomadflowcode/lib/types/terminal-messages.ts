@@ -1,4 +1,5 @@
-export type AgentStateKind = 'waiting_for_input' | 'waiting_for_permission' | 'generating' | 'idle' | 'done' | 'error' | 'unknown';
+import type { AgentStateKind } from './session';
+export type { AgentStateKind };
 
 /** Pane info received from the bundled terminal HTML via postMessage. */
 export interface Pane {

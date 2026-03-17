@@ -4,19 +4,12 @@ import { ChevronRight, Home, GitBranch, Plus } from 'lucide-react-native';
 import type { Feature } from '@shared';
 import type { AgentStateKind, SessionWithState } from '@/lib/types/session';
 import { AgentStatusBadge } from '@/components/shared/AgentStatusBadge';
-
-const STATE_PRIORITY: Record<AgentStateKind, number> = {
-  error: 0,
-  waiting_for_input: 1,
-  generating: 2,
-  idle: 3,
-  done: 4,
-  unknown: 5,
-};
+import { aggregateState as getAggregateState } from '@/lib/agent-state';
 
 const STATE_LABEL_KEY: Record<AgentStateKind, string> = {
   error: 'agents.state.error',
   waiting_for_input: 'agents.state.waiting',
+  waiting_for_permission: 'agents.state.permission',
   generating: 'agents.state.generating',
   idle: 'agents.state.idle',
   done: 'agents.state.done',
@@ -26,6 +19,7 @@ const STATE_LABEL_KEY: Record<AgentStateKind, string> = {
 const STATE_COLOR: Record<AgentStateKind, string> = {
   error: 'text-destructive',
   waiting_for_input: 'text-warning',
+  waiting_for_permission: 'text-warning',
   generating: 'text-primary',
   idle: 'text-muted-foreground',
   done: 'text-success',
@@ -36,11 +30,9 @@ function aggregateState(
   sessions: SessionWithState[]
 ): { state: AgentStateKind; count: number } | null {
   if (sessions.length === 0) return null;
-  const worst = sessions.reduce((a, b) =>
-    STATE_PRIORITY[a.agentState] <= STATE_PRIORITY[b.agentState] ? a : b
-  );
-  const count = sessions.filter((s) => s.agentState === worst.agentState).length;
-  return { state: worst.agentState, count };
+  const state = getAggregateState(sessions);
+  const count = sessions.filter((s) => s.agentState === state).length;
+  return { state, count };
 }
 
 interface WorktreeNodeProps {

@@ -23,53 +23,16 @@ export interface Feature {
   worktreeName?: string;
 }
 
-export interface PTYPane {
-  index: number;
-  name: string;
-  active: boolean;
-}
-
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-export interface RepoListResponse {
-  repos: Repository[];
-}
-
-export interface FeatureListResponse {
-  features: Feature[];
-}
-
-export interface SwitchFeatureResult {
-  switched: boolean;
-  worktreePath: string;
-  worktreeName: string;
-}
-
-export interface CreateFeatureResult {
-  worktreePath: string;
-  branch: string;
-  worktreeName: string;
-}
-
 export interface BranchInfo {
   name: string;
   isRemote: boolean;
   remoteName?: string;
-}
-
-export interface BranchListResponse {
-  branches: BranchInfo[];
-  defaultBranch: string;
-}
-
-export interface AttachBranchResult {
-  worktreePath: string;
-  branch: string;
-  worktreeName: string;
 }
 
 // Git diff/status types (matches Rust models in nomadflow-core/src/models.rs)

@@ -15,8 +15,7 @@ import {
   InfoIcon,
   GlobeIcon,
 } from 'lucide-react-native';
-import { useColorScheme, colorScheme as nwColorScheme } from 'nativewind';
-import * as React from 'react';
+import { useColorScheme } from 'nativewind';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/lib/i18n';

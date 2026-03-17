@@ -18,7 +18,6 @@ import {
   PlusIcon,
   XIcon,
 } from 'lucide-react-native';
-import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {

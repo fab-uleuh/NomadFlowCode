@@ -1,6 +1,6 @@
-import type { Server, ApiResponse, SwitchFeatureResult, WorktreeStatusResponse, FileDiffResponse, FileContentResponse, ListDirResponse } from '@shared';
+import type { Server, ApiResponse, WorktreeStatusResponse, FileDiffResponse, FileContentResponse, ListDirResponse } from '@shared';
 import type { ListSessionsResponse } from './types/session';
-import type { ServerCommand, SwitchFeatureParams } from './types';
+import type { ServerCommand } from './types';
 
 /**
  * Get the API base URL from server config
@@ -66,24 +66,6 @@ export async function executeServerCommand(
 }
 
 /**
- * Switch to a feature worktree before opening the terminal.
- * This ensures the worktree exists and is ready for a PTY session.
- */
-export async function switchToFeature(
-  server: Server,
-  params: SwitchFeatureParams
-): Promise<ApiResponse<SwitchFeatureResult>> {
-  const body: Record<string, string> = {
-    repoPath: params.repoPath,
-    featureName: params.featureName,
-  };
-  return executeServerCommand(server, {
-    action: 'switch-feature',
-    params: body,
-  });
-}
-
-/**
  * Fetch worktree status (git diff stats) for a given worktree path.
  */
 export async function fetchWorktreeStatus(
@@ -146,19 +128,6 @@ export async function fetchSessions(
 ): Promise<ApiResponse<ListSessionsResponse>> {
   return executeServerCommand(server, {
     action: 'list-sessions',
-  });
-}
-
-/**
- * Close an agent session (kills the PTY pane).
- */
-export async function closeSession(
-  server: Server,
-  sessionId: string
-): Promise<ApiResponse<{ closed: boolean }>> {
-  return executeServerCommand(server, {
-    action: 'close-session',
-    params: { sessionId },
   });
 }
 
